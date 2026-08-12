@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 1000">
+<defs>
+  <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#ffffff"/><stop offset="1" stop-color="#f2eeeb"/></linearGradient>
+  <radialGradient id="glow"><stop stop-color="#E0122C" stop-opacity=".12"/><stop offset="1" stop-color="#E0122C" stop-opacity="0"/></radialGradient>
+  <linearGradient id="lens" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#d7c3a2" stop-opacity="0.68"/><stop offset="1" stop-color="#fff" stop-opacity=".18"/></linearGradient>
+</defs>
+<rect width="800" height="1000" rx="36" fill="url(#bg)"/>
+<circle cx="650" cy="160" r="260" fill="url(#glow)"/>
+<g transform="translate(400 505) rotate(2)">
+  <ellipse cx="-165" cy="0" rx="142" ry="128" fill="url(#lens)" stroke="#3b3028" stroke-width="20"/>
+  <ellipse cx="165" cy="0" rx="142" ry="128" fill="url(#lens)" stroke="#3b3028" stroke-width="20"/>
+  <path d="M-23 -12 C-10 -38 10 -38 23 -12" fill="none" stroke="#3b3028" stroke-width="18" stroke-linecap="round"/>
+  <path d="M-305 -45 L-382 -82" stroke="#3b3028" stroke-width="18" stroke-linecap="round"/>
+  <path d="M305 -45 L382 -82" stroke="#3b3028" stroke-width="18" stroke-linecap="round"/>
+  <path d="M-270 -80 C-210 -118 -120 -125 -62 -100" fill="none" stroke="#fff" stroke-opacity=".65" stroke-width="12" stroke-linecap="round"/>
+  <path d="M60 -100 C120 -125 210 -118 270 -80" fill="none" stroke="#fff" stroke-opacity=".65" stroke-width="12" stroke-linecap="round"/>
+</g>
+<text x="54" y="850" font-family="Arial, Helvetica, sans-serif" font-size="22" letter-spacing="4" fill="#7a756f">EMPORIO ARMANI</text>
+<text x="54" y="895" font-family="Georgia, serif" font-size="34" fill="#14110f">Emporio Armani EA1131</text>
+<rect x="54" y="925" width="90" height="5" rx="2.5" fill="#E0122C"/>
+</svg>

@@ -1,0 +1,22 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: infrared-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: infrared
+      POSTGRES_PASSWORD: infrared_dev_password
+      POSTGRES_DB: infrared
+    ports:
+      - "5432:5432"
+    volumes:
+      - infrared_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U infrared -d infrared"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  infrared_postgres_data:
+    name: infrared_postgres_data
