@@ -1,6 +1,11 @@
-# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
+# ============================================
+# InfraRed Optic Store - .gitignore
+# ============================================
 
-# dependencies
+
+# --------------------------------------------
+# Dependencies
+# --------------------------------------------
 /node_modules
 /.pnp
 .pnp.*
@@ -10,49 +15,144 @@
 !.yarn/releases
 !.yarn/versions
 
-# testing
+
+# --------------------------------------------
+# Testing
+# --------------------------------------------
 /coverage
 
-# next.js
+
+# --------------------------------------------
+# Next.js
+# --------------------------------------------
 /.next/
 /out/
+
+
+# --------------------------------------------
+# Build / production
+# --------------------------------------------
+/build
+/dist
+
+
+# --------------------------------------------
+# Temporary image processing
+# --------------------------------------------
 /.transparent-stage/
 /transparent-stage/
 /scripts/bg-removal-test-output/
 /scripts/pipeline-test-output/
 
-# production
-/build
 
-# misc
-.DS_Store
+# --------------------------------------------
+# Environment variables / secrets
+# IMPORTANT: never commit real secrets
+# --------------------------------------------
+.env
+.env.*
+.env.local
+.env.development
+.env.development.local
+.env.production
+.env.production.local
+.env.test
+.env.test.local
+
+# Example environment files ARE allowed
+!.env.example
+!.env.production.example
+
+
+# --------------------------------------------
+# Secrets / certificates
+# --------------------------------------------
 *.pem
+*.key
+*.crt
+*.p12
+*.pfx
 
-# debug
+
+# --------------------------------------------
+# Logs
+# --------------------------------------------
+*.log
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 
-# env files (can opt-in for committing if needed)
-.env*
-!.env.production.example
 
-# vercel
-.vercel
+# --------------------------------------------
+# Vercel
+# --------------------------------------------
+.vercel/
 
-# typescript
+
+# --------------------------------------------
+# TypeScript
+# --------------------------------------------
 *.tsbuildinfo
 next-env.d.ts
 
-# InfraRed — extra ignores
-.env
-.env.local
-.env*.local
-/prisma/*.db
-/prisma/migrations/dev
-.DS_Store
 
-# Runtime uploads (do not commit customer/product media)
-public/uploads/*
-!public/uploads/.gitkeep
+# --------------------------------------------
+# Prisma / local databases
+# --------------------------------------------
+/prisma/*.db
+/prisma/*.db-journal
+/prisma/migrations/dev/
+
+
+# --------------------------------------------
+# Runtime uploads
+# Do not commit files uploaded by users/admin
+# --------------------------------------------
+/public/uploads/*
+!/public/uploads/.gitkeep
+
+
+# --------------------------------------------
+# Private / obsolete archives
+# --------------------------------------------
+/docs/archive/
+
+
+# --------------------------------------------
+# Operating system files
+# --------------------------------------------
+.DS_Store
+Thumbs.db
+Thumbs.db:encryptable
+Desktop.ini
+
+
+# --------------------------------------------
+# IDE / editor temporary files
+# --------------------------------------------
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+
+.idea/
+*.swp
+*.swo
+*~
+
+
+# --------------------------------------------
+# Temporary files
+# --------------------------------------------
+*.tmp
+*.temp
+.cache/
+.eslintcache
+
+
+# --------------------------------------------
+# Local backup files
+# --------------------------------------------
+*.bak
+*.backup
+*.old
