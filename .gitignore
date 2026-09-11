@@ -16,6 +16,10 @@
 # next.js
 /.next/
 /out/
+/.transparent-stage/
+/transparent-stage/
+/scripts/bg-removal-test-output/
+/scripts/pipeline-test-output/
 
 # production
 /build
@@ -32,6 +36,7 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 .env*
+!.env.production.example
 
 # vercel
 .vercel
