@@ -89,4 +89,10 @@ Afficher :
 - message du commit
 - confirmation du push GitHub
 
+## Règles Git supplémentaires
+
+- S'il n'y a aucune modification à sauvegarder, ne pas créer de commit vide.
+- Ne jamais utiliser `git add -f` pour forcer l'ajout d'un fichier ignoré.
+- Si `git push` échoue pour une raison d'authentification ou de connexion, ne pas considérer la tâche comme terminée et signaler clairement l'erreur.
+
 Ne pas considérer l'étape comme terminée tant que le commit et le push n'ont pas réussi.
