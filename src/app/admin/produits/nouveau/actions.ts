@@ -2,13 +2,20 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { getSession } from "@/lib/auth";
+import { requirePermission } from "@/lib/authz";
 import { prisma } from "@/lib/prisma";
-
-async function requireAdmin() {
-  const s = await getSession();
-  if (!s || !["ADMIN", "DEVELOPER"].includes(s.role)) throw new Error("Non autorisé");
-}
+import { revalidateProductViews } from "@/lib/revalidate";
+import { computeImageFingerprint } from "@/lib/product-intelligence/duplicate-detector";
+import { findSimilarExistingImages, distanceToSimilarityPercent } from "@/lib/product-intelligence/similarity-lookup";
+import {
+  getProductColor,
+  getProductShape,
+  getRequiredText,
+  getTarget,
+  LIMITS,
+  parseMoney,
+  validateStoredAssetUrl,
+} from "@/lib/validation";
 
 function slugify(value: string) {
   return value.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
@@ -25,20 +32,48 @@ async function uniqueSlug(base: string) {
 }
 
 export async function createProductAction(formData: FormData) {
-  await requireAdmin();
+  await requirePermission("prices.edit");
+  await requirePermission("stock.edit");
+  await requirePermission("products.create");
 
-  const name = String(formData.get("name") || "").trim();
-  const reference = String(formData.get("reference") || "").trim();
-  const description = String(formData.get("description") || "").trim();
-  const price = Number(formData.get("price"));
-  const oldPriceRaw = String(formData.get("oldPrice") || "").trim();
-  const oldPrice = oldPriceRaw ? Number(oldPriceRaw) : null;
-  const brandId = String(formData.get("brandId") || "");
-  const categoryId = String(formData.get("categoryId") || "");
-  if (!name || !reference || !description || !brandId || !categoryId || !Number.isFinite(price)) throw new Error("Champs produit invalides.");
+  const name = getRequiredText(formData, "name", "Nom du modèle", LIMITS.productName);
+  const reference = getRequiredText(formData, "reference", "Référence", LIMITS.reference);
+  const description = getRequiredText(formData, "description", "Description", LIMITS.description);
+  const price = parseMoney(formData.get("price"), "Prix", { allowZero: true }) as number;
+  const oldPrice = parseMoney(formData.get("oldPrice"), "Ancien prix", { required: false });
+  const brandId = getRequiredText(formData, "brandId", "Marque", 100);
+  const categoryId = getRequiredText(formData, "categoryId", "Catégorie", 100);
+  const target = getTarget(formData.get("target"));
+  const color = getProductColor(formData.get("color"));
+  const shape = getProductShape(formData.get("shape"));
 
-  const discount = oldPrice && oldPrice > price ? Math.round(((oldPrice - price) / oldPrice) * 100) : null;
+  if (price === 0 && oldPrice !== null) {
+    throw new Error("Un ancien prix ne peut pas être défini quand le prix est « en boutique » (0 DT).");
+  }
+  if (oldPrice !== null && oldPrice <= price) {
+    throw new Error("L'ancien prix doit être supérieur au prix actuel.");
+  }
+  const [brand, category, referenceExists] = await Promise.all([
+    prisma.brand.findUnique({ where: { id: brandId }, select: { id: true } }),
+    prisma.category.findUnique({ where: { id: categoryId }, select: { id: true } }),
+    prisma.product.findUnique({ where: { reference }, select: { id: true } }),
+  ]);
+  if (!brand) throw new Error("La marque sélectionnée n'existe pas.");
+  if (!category) throw new Error("La catégorie sélectionnée n'existe pas.");
+  if (referenceExists) throw new Error("Cette référence produit existe déjà.");
+
+  const discount = oldPrice !== null ? Math.round(((oldPrice - price) / oldPrice) * 100) : null;
   const slug = await uniqueSlug(name);
+  const imageUrlRaw = String(formData.get("imageUrl") || "").trim();
+  const imageUrl = imageUrlRaw ? validateStoredAssetUrl(imageUrlRaw, "Image") : "";
+  const imageAlt = String(formData.get("imageAlt") || name).trim().slice(0, LIMITS.imageAlt);
+
+  // Perceptual fingerprint + similarity check happen BEFORE creating, so a
+  // strong match can be surfaced right after redirect — nothing here ever
+  // blocks or auto-cancels the creation, it's purely advisory.
+  const fingerprint = imageUrl ? await computeImageFingerprint(imageUrl).catch(() => null) : null;
+  const similarMatches = fingerprint ? await findSimilarExistingImages(fingerprint.hash) : [];
+  const topMatch = similarMatches[0];
 
   const product = await prisma.product.create({
     data: {
@@ -51,20 +86,25 @@ export async function createProductAction(formData: FormData) {
       discount,
       categoryId,
       brandId,
-      color: String(formData.get("color") || "").trim() || null,
-      shape: String(formData.get("shape") || "").trim() || null,
-      target: (String(formData.get("target") || "MIXTE") as "HOMME" | "FEMME" | "MIXTE" | "ENFANT"),
+      color,
+      shape,
+      target,
       available: formData.get("available") === "on",
       featured: formData.get("featured") === "on",
       isNew: formData.get("isNew") === "on",
       isPromotion: Boolean(oldPrice && oldPrice > price),
-      images: String(formData.get("imageUrl") || "").trim()
-        ? { create: [{ url: String(formData.get("imageUrl")).trim(), alt: String(formData.get("imageAlt") || name).trim(), sortOrder: 0 }] }
+      images: imageUrl
+        ? { create: [{ url: imageUrl, alt: imageAlt || name, sortOrder: 0, phash: fingerprint?.hash ?? null }] }
         : undefined,
     },
   });
 
   revalidatePath("/admin");
-  revalidatePath("/catalogue");
+  revalidateProductViews(product.slug);
+
+  if (topMatch) {
+    const similarity = distanceToSimilarityPercent(topMatch.distance);
+    redirect(`/admin/produits/${product.id}?similarName=${encodeURIComponent(topMatch.productName)}&similarSlug=${encodeURIComponent(topMatch.productSlug)}&similarPercent=${similarity}`);
+  }
   redirect(`/admin/produits/${product.id}`);
 }

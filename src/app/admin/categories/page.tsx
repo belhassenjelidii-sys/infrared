@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import { getSession } from "@/lib/auth";
+import { requirePagePermission } from "@/lib/authz";
 import AdminShell from "@/components/AdminShell";
 import ConfirmSubmitButton from "@/components/ConfirmSubmitButton";
 import { createCategoryAction, updateCategoryAction, toggleCategoryActiveAction, deleteCategoryAction } from "./actions";
@@ -7,7 +7,7 @@ import { createCategoryAction, updateCategoryAction, toggleCategoryActiveAction,
 export const dynamic = "force-dynamic";
 
 export default async function AdminCategoriesPage() {
-  const session = await getSession();
+  const session = await requirePagePermission("categories.manage");
   const categories = await prisma.category.findMany({
     include: { _count: { select: { products: true } } },
     orderBy: { name: "asc" },

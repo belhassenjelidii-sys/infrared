@@ -49,6 +49,10 @@ export default function LoginPage() {
             <p className="rounded-lg bg-red-soft px-3 py-2 text-sm text-red">{state.error}</p>
           )}
 
+          <div className="text-right">
+            <Link href="/forgot-password" className="text-xs font-medium text-stone hover:text-red">Mot de passe oublié ?</Link>
+          </div>
+
           <button
             type="submit"
             disabled={pending}

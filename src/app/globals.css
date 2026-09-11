@@ -1,14 +1,25 @@
 @import "tailwindcss";
 
+/* Back-office themes: panels, forms and tables inherit legible colours. */
+.admin-surface { --admin-panel:#101c2a; --admin-muted:#172536; --admin-line:#2a3a4e; --admin-text:#e5edf7; --admin-subtle:#9fb0c5; background:#07111d; color:var(--admin-text); }
+.admin-surface[data-theme="light"] { --admin-panel:#fff; --admin-muted:#f1f5f9; --admin-line:#d7e0ea; --admin-text:#142033; --admin-subtle:#5d6b7d; background:#f5f8fc; color:var(--admin-text); }
+.admin-surface .bg-white { background-color:var(--admin-panel)!important; }
+.admin-surface .bg-mist, .admin-surface .bg-slate-50 { background-color:var(--admin-muted)!important; }
+.admin-surface .border, .admin-surface .border-line, .admin-surface .divide-y > :not([hidden]) ~ :not([hidden]) { border-color:var(--admin-line)!important; }
+.admin-surface .text-stone, .admin-surface .text-slate-500, .admin-surface .text-slate-400 { color:var(--admin-subtle)!important; }
+.admin-surface input, .admin-surface textarea, .admin-surface select { background-color:var(--admin-panel); color:var(--admin-text); border-color:var(--admin-line); }
+.admin-surface[data-theme="light"] aside, .admin-surface[data-theme="light"] header, .admin-surface[data-theme="light"] details { background-color:#fff!important; border-color:var(--admin-line)!important; }
+.admin-surface[data-theme="light"] aside a, .admin-surface[data-theme="light"] header, .admin-surface[data-theme="light"] .admin-theme-toggle { color:#26364a!important; }
+
 :root {
   --color-red: #E0122C;
   --color-red-dark: #A80A20;
   --color-red-soft: #FDE9EC;
-  --color-ink: #14110F;
+  --color-ink: #111111;
   --color-paper: #FFFFFF;
-  --color-mist: #F6F3F1;
-  --color-line: #E7E2DE;
-  --color-stone: #7A756F;
+  --color-mist: #F7F7F7;
+  --color-line: #E2E2E2;
+  --color-stone: #777777;
 }
 
 @theme inline {
@@ -20,8 +31,8 @@
   --color-mist: var(--color-mist);
   --color-line: var(--color-line);
   --color-stone: var(--color-stone);
-  --font-display: var(--font-fraunces);
-  --font-sans: var(--font-inter);
+  --font-display: Arial, Helvetica, sans-serif;
+  --font-sans: Arial, Helvetica, sans-serif;
 }
 
 * {
@@ -35,13 +46,20 @@ html {
 body {
   background: var(--color-paper);
   color: var(--color-ink);
-  font-family: var(--font-inter), system-ui, sans-serif;
+  font-family: Arial, Helvetica, sans-serif;
   -webkit-font-smoothing: antialiased;
 }
 
-.font-display {
-  font-family: var(--font-fraunces), Georgia, serif;
+.vf-container {
+  width: min(100%, 1440px);
+  margin-inline: auto;
+  padding-inline: clamp(18px, 2.05vw, 32px);
 }
+
+.vf-section { padding-block: clamp(54px, 6vw, 94px); }
+.vf-rule-title { font-size: clamp(1.45rem, 2.1vw, 2rem); font-weight: 500; letter-spacing: -0.02em; }
+
+.font-display { font-family: Arial, Helvetica, sans-serif; }
 
 /* Lens motif: thin circular ring used as the site's signature accent */
 .lens-ring {
@@ -58,7 +76,7 @@ body {
 }
 
 .eyebrow {
-  font-family: var(--font-inter), sans-serif;
+  font-family: Arial, Helvetica, sans-serif;
   font-size: 0.72rem;
   letter-spacing: 0.22em;
   text-transform: uppercase;
@@ -77,20 +95,105 @@ body {
   to { opacity: 1; transform: translateY(0); }
 }
 
-@keyframes marquee {
-  from { transform: translateX(0); }
-  to { transform: translateX(-50%); }
+@keyframes brand-marquee {
+  from { transform: translate3d(0, 0, 0); }
+  to { transform: translate3d(-50%, 0, 0); }
 }
 
-.animate-marquee {
-  animation: marquee 28s linear infinite;
+.brand-marquee-track {
+  animation: brand-marquee 22s linear infinite;
+  animation-play-state: running;
+  will-change: transform;
 }
 
-.animate-marquee:hover {
-  animation-play-state: paused;
+.brand-marquee:hover .brand-marquee-track {
+  animation-play-state: paused !important;
+}
+
+.brand-marquee-item {
+  transition: transform 260ms ease, box-shadow 260ms ease, border-color 260ms ease, background-color 260ms ease;
+}
+
+.brand-marquee-item:active {
+  transform: scale(0.97);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* This brand rail stays animated by product choice; hover still pauses it. */
+  .brand-marquee-track {
+    animation: brand-marquee 22s linear infinite !important;
+  }
+}
+
+/* Mouse hover must always pause the brand rail; leaving resumes it. */
+.brand-marquee:hover .brand-marquee-track {
+  animation-play-state: paused !important;
 }
 
 ::selection {
   background: var(--color-red);
   color: var(--color-paper);
+}
+
+/* Dashboard elements consume the theme variables so light and dark stay consistent. */
+.admin-surface .bg-white { background-color: var(--admin-panel) !important; }
+.admin-surface .bg-slate-50,
+.admin-surface .bg-slate-100,
+.admin-surface .bg-mist { background-color: var(--admin-muted) !important; }
+.admin-surface .bg-ink { background-color: #6558f5 !important; }
+.admin-surface .text-ink { color: var(--admin-text) !important; }
+.admin-surface .text-stone,
+.admin-surface .text-slate-500,
+.admin-surface .text-slate-400,
+.admin-surface .text-slate-300 { color: var(--admin-subtle) !important; }
+.admin-surface .border-line,
+.admin-surface .border,
+.admin-surface .border-slate-700,
+.admin-surface .border-slate-800,
+.admin-surface .divide-y > :not(:last-child) { border-color: var(--admin-line) !important; }
+.admin-surface input,
+.admin-surface select,
+.admin-surface textarea { border-color: var(--admin-line); background-color: var(--admin-panel); color: var(--admin-text); }
+.admin-surface input::placeholder,
+.admin-surface textarea::placeholder { color: var(--admin-subtle); }
+.admin-surface option { background: var(--admin-panel); color: var(--admin-text); }
+.admin-surface summary { color: var(--admin-text); }
+.admin-surface table tbody tr:hover { background-color: color-mix(in srgb, var(--admin-muted) 78%, transparent); }
+.admin-surface[data-theme="light"] .bg-\[\#07111d\],
+.admin-surface[data-theme="light"] .bg-\[\#09131f\],
+.admin-surface[data-theme="light"] .bg-\[\#101b29\],
+.admin-surface[data-theme="light"] .bg-\[\#0b1522\] { background-color: var(--admin-panel) !important; }
+.admin-surface[data-theme="light"] .text-white,
+.admin-surface[data-theme="light"] .text-slate-100 { color: var(--admin-text) !important; }
+.admin-surface[data-theme="light"] .bg-red.text-white,
+.admin-surface[data-theme="light"] .bg-red-500.text-white,
+.admin-surface[data-theme="light"] .bg-ink.text-white,
+.admin-surface[data-theme="light"] [class*="from-indigo-"][class*="to-violet-"] { color: #fff !important; }
+.admin-surface[data-theme="light"] .text-emerald-300,
+.admin-surface[data-theme="light"] .text-emerald-400 { color:#047857 !important; }
+.admin-surface[data-theme="light"] .text-amber-300,
+.admin-surface[data-theme="light"] .text-amber-400 { color:#a16207 !important; }
+.admin-surface[data-theme="light"] .text-red-400 { color:#c8102e !important; }
+.admin-action-button {
+  display: inline-flex;
+  min-height: 2.5rem;
+  align-items: center;
+  justify-content: center;
+  gap: .4rem;
+  border: 1px solid var(--admin-line);
+  border-radius: .6rem;
+  background: var(--admin-panel);
+  padding: .55rem .8rem;
+  color: var(--admin-text);
+  font-size: .75rem;
+  font-weight: 700;
+  line-height: 1.1;
+  transition: border-color .15s ease, background-color .15s ease, color .15s ease;
+}
+.admin-action-button:hover { border-color: var(--color-red); color: var(--color-red); background: color-mix(in srgb, var(--color-red) 7%, var(--admin-panel)); }
+.document-label { font-size:.65rem; font-weight:800; letter-spacing:.16em; text-transform:uppercase; color:#68758a; }
+@media print {
+  @page { size: A4; margin: 10mm; }
+  body { background:#fff !important; }
+  .print-document { max-width:none !important; padding:0 !important; }
 }

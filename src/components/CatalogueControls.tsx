@@ -4,18 +4,31 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { SlidersHorizontal, X } from "lucide-react";
-import { brands, categories } from "@/lib/data";
+import type { Brand, Category } from "@/types";
+import { GLASSES_SHAPES } from "@/lib/glasses-attributes";
 
 const TARGETS = ["Homme", "Femme", "Mixte", "Enfant"];
-const SHAPES = ["Rectangle", "Carrée", "Ronde", "Ovale", "Vintage"];
 const SORTS = [
-  { value: "popularite", label: "Populaires" },
   { value: "nouveautes", label: "Nouveautés" },
+  { value: "marque-asc", label: "Marque A–Z" },
+  { value: "marque-desc", label: "Marque Z–A" },
+  { value: "reference-asc", label: "Référence A–Z" },
+  { value: "reference-desc", label: "Référence Z–A" },
   { value: "prix-asc", label: "Prix croissant" },
   { value: "prix-desc", label: "Prix décroissant" },
 ];
 
-export default function CatalogueControls({ resultCount }: { resultCount: number }) {
+export default function CatalogueControls({
+  resultCount,
+  brands,
+  categories,
+  showPrices,
+}: {
+  resultCount: number;
+  brands: Brand[];
+  categories: Category[];
+  showPrices: boolean;
+}) {
   const router = useRouter();
   const params = useSearchParams();
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -27,6 +40,7 @@ export default function CatalogueControls({ resultCount }: { resultCount: number
     } else {
       next.set(key, value);
     }
+    if (key !== "page") next.delete("page");
     router.push(`/catalogue?${next.toString()}`, { scroll: false });
   }
 
@@ -36,25 +50,25 @@ export default function CatalogueControls({ resultCount }: { resultCount: number
     target: params.get("target") ?? "",
     shape: params.get("forme") ?? params.get("shape") ?? "",
     isNew: params.get("isNew") === "1",
-    isPromotion: params.get("isPromotion") === "1",
-    sort: params.get("sort") ?? "popularite",
+    isPromotion: showPrices && params.get("isPromotion") === "1",
+    sort: params.get("sort") ?? "nouveautes",
   };
 
   const FilterBlocks = (
-    <div className="space-y-7">
-      <div>
-        <p className="eyebrow text-stone">Catégorie</p>
-        <div className="mt-3 flex flex-col gap-2">
+    <div className="divide-y divide-black/10 border-y border-black/15">
+      <div className="py-5">
+        <p className="text-xs font-semibold uppercase tracking-[0.15em]">Catégorie</p>
+        <div className="mt-4 flex flex-col gap-3">
           {categories
             .filter((c) => c.slug === "solaires" || c.slug === "optiques")
             .map((c) => (
               <button
                 key={c.slug}
                 onClick={() => setParam("category", c.slug)}
-                className={`w-fit rounded-full border px-3.5 py-1.5 text-sm transition-colors ${
+                className={`w-fit border-b text-sm transition-colors ${
                   active.category === c.slug
-                    ? "border-red bg-red text-white"
-                    : "border-line text-ink/80 hover:border-red hover:text-red"
+                    ? "border-black text-black"
+                    : "border-transparent text-ink/65 hover:border-black"
                 }`}
               >
                 {c.name}
@@ -63,17 +77,17 @@ export default function CatalogueControls({ resultCount }: { resultCount: number
         </div>
       </div>
 
-      <div>
-        <p className="eyebrow text-stone">Marque</p>
-        <div className="mt-3 flex flex-wrap gap-2">
+      <div className="py-5">
+        <p className="text-xs font-semibold uppercase tracking-[0.15em]">Marque</p>
+        <div className="mt-4 flex max-h-64 flex-col gap-3 overflow-y-auto">
           {brands.map((b) => (
             <button
               key={b.slug}
               onClick={() => setParam("brand", b.slug)}
-              className={`rounded-full border px-3.5 py-1.5 text-sm transition-colors ${
+              className={`w-fit border-b text-sm transition-colors ${
                 active.brand === b.slug
-                  ? "border-red bg-red text-white"
-                  : "border-line text-ink/80 hover:border-red hover:text-red"
+                  ? "border-black text-black"
+                  : "border-transparent text-ink/65 hover:border-black"
               }`}
             >
               {b.name}
@@ -82,17 +96,17 @@ export default function CatalogueControls({ resultCount }: { resultCount: number
         </div>
       </div>
 
-      <div>
-        <p className="eyebrow text-stone">Genre / Cible</p>
-        <div className="mt-3 flex flex-wrap gap-2">
+      <div className="py-5">
+        <p className="text-xs font-semibold uppercase tracking-[0.15em]">Genre</p>
+        <div className="mt-4 flex flex-col gap-3">
           {TARGETS.map((t) => (
             <button
               key={t}
               onClick={() => setParam("target", t)}
-              className={`rounded-full border px-3.5 py-1.5 text-sm transition-colors ${
+              className={`w-fit border-b text-sm transition-colors ${
                 active.target === t
-                  ? "border-red bg-red text-white"
-                  : "border-line text-ink/80 hover:border-red hover:text-red"
+                  ? "border-black text-black"
+                  : "border-transparent text-ink/65 hover:border-black"
               }`}
             >
               {t}
@@ -102,10 +116,10 @@ export default function CatalogueControls({ resultCount }: { resultCount: number
       </div>
 
 
-      <div>
-        <p className="eyebrow text-stone">Forme</p>
-        <div className="mt-3 flex flex-wrap gap-2">
-          {SHAPES.map((shape) => (
+      <div className="py-5">
+        <p className="text-xs font-semibold uppercase tracking-[0.15em]">Forme</p>
+        <div className="mt-4 flex flex-wrap gap-2">
+          {GLASSES_SHAPES.map((shape) => (
             <button
               key={shape}
               onClick={() => setParam("forme", active.shape === shape ? null : shape)}
@@ -121,8 +135,8 @@ export default function CatalogueControls({ resultCount }: { resultCount: number
         </div>
       </div>
 
-      <div>
-        <p className="eyebrow text-stone">Disponibilité</p>
+      <div className="py-5">
+        <p className="text-xs font-semibold uppercase tracking-[0.15em]">Sélection</p>
         <div className="mt-3 flex flex-wrap gap-2">
           <button
             onClick={() => setParam("isNew", active.isNew ? null : "1")}
@@ -134,7 +148,7 @@ export default function CatalogueControls({ resultCount }: { resultCount: number
           >
             Nouveautés
           </button>
-          <button
+          {showPrices && <button
             onClick={() => setParam("isPromotion", active.isPromotion ? null : "1")}
             className={`rounded-full border px-3.5 py-1.5 text-sm transition-colors ${
               active.isPromotion
@@ -143,7 +157,7 @@ export default function CatalogueControls({ resultCount }: { resultCount: number
             }`}
           >
             Promotions
-          </button>
+          </button>}
         </div>
       </div>
 
@@ -160,7 +174,7 @@ export default function CatalogueControls({ resultCount }: { resultCount: number
 
   return (
     <>
-      <div className="flex items-center justify-between gap-4 border-b border-line pb-5">
+      <div className="flex items-center justify-between gap-4 border-y border-black/20 py-4">
         <p className="text-sm text-stone">
           <span className="font-medium text-ink">{resultCount}</span> monture
           {resultCount > 1 ? "s" : ""}
@@ -169,9 +183,9 @@ export default function CatalogueControls({ resultCount }: { resultCount: number
           <select
             value={active.sort}
             onChange={(e) => setParam("sort", e.target.value)}
-            className="rounded-full border border-line bg-white px-3.5 py-2 text-sm outline-none"
+            className="border-0 bg-white px-2 py-2 text-xs font-semibold uppercase tracking-wider outline-none"
           >
-            {SORTS.map((s) => (
+            {SORTS.filter((s) => showPrices || !s.value.startsWith("prix-")).map((s) => (
               <option key={s.value} value={s.value}>
                 Trier — {s.label}
               </option>
@@ -203,7 +217,7 @@ export default function CatalogueControls({ resultCount }: { resultCount: number
               animate={{ y: 0 }}
               exit={{ y: "100%" }}
               transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
-              className="fixed inset-x-0 bottom-0 z-50 flex max-h-[85vh] flex-col rounded-t-3xl bg-white shadow-2xl lg:hidden"
+              className="fixed inset-x-0 bottom-0 z-50 flex max-h-[88vh] flex-col bg-white shadow-2xl lg:hidden"
             >
               <div className="flex justify-center pt-3">
                 <span className="h-1.5 w-10 rounded-full bg-line" />

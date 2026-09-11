@@ -3,10 +3,22 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev": "node scripts/next-preview.mjs",
+    "predev": "prisma generate",
     "build": "next build",
+    "prebuild": "prisma generate",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "test": "tsx --test tests/**/*.test.ts",
+    "db:seed": "tsx prisma/seed.ts",
+    "db:migrate": "prisma migrate deploy",
+    "catalogue:import": "tsx prisma/import-catalogue.ts",
+    "catalogue:cache-images": "tsx scripts/cache-catalogue-images.ts",
+    "catalogue:transparent": "tsx scripts/migrate-product-images-to-transparent-png.ts",
+    "catalogue:backfill-health": "tsx scripts/backfill-catalogue-health.ts",
+    "production:check": "tsx scripts/verify-production-ready.ts",
+    "local:check": "tsx scripts/audit-local-readiness.ts",
+    "cloudflare:tunnel": "npx wrangler@latest tunnel quick-start http://localhost:3000"
   },
   "dependencies": {
     "@prisma/adapter-pg": "^7.9.1",
@@ -20,7 +32,9 @@
     "next": "16.3.0",
     "pg": "^8.13.1",
     "react": "19.2.8",
-    "react-dom": "19.2.8"
+    "react-dom": "19.2.8",
+    "server-only": "^0.0.1",
+    "sharp": "^0.35.4"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",

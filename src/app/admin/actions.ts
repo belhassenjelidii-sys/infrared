@@ -1,32 +1,50 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { getSession } from "@/lib/auth";
+import { requirePermission } from "@/lib/authz";
 import { prisma } from "@/lib/prisma";
-import { deleteLocalUpload } from "@/lib/uploads";
-
-async function requireAdmin() {
-  const session = await getSession();
-  if (!session || session.role !== "ADMIN") {
-    throw new Error("Non autorisé");
-  }
-  return session;
-}
+import { deleteUploadedImageIfUnreferenced } from "@/lib/uploads";
+import { revalidateProductViews } from "@/lib/revalidate";
 
 export async function deleteProductAction(productId: string) {
-  await requireAdmin();
-  const images = await prisma.productImage.findMany({ where: { productId } });
+  await requirePermission("products.delete");
+  const [images, product] = await Promise.all([
+    prisma.productImage.findMany({ where: { productId } }),
+    prisma.product.findUnique({ where: { id: productId }, select: { slug: true } }),
+  ]);
   await prisma.productImage.deleteMany({ where: { productId } });
-  for (const image of images) await deleteLocalUpload(image.url);
+  for (const image of images) await deleteUploadedImageIfUnreferenced(image.url);
   await prisma.product.delete({ where: { id: productId } });
   revalidatePath("/admin");
+  revalidateProductViews(product?.slug);
 }
 
 export async function toggleAvailableAction(productId: string, current: boolean) {
-  await requireAdmin();
-  await prisma.product.update({
+  await requirePermission("stock.edit");
+  const product = await prisma.product.update({
     where: { id: productId },
     data: { available: !current },
   });
   revalidatePath("/admin");
+  revalidateProductViews(product.slug);
+}
+
+export async function togglePublishedAction(productId: string, current: boolean) {
+  await requirePermission("products.edit");
+  const product = await prisma.product.findUnique({ where: { id: productId }, select: { slug: true, published: true } });
+  if (!product) throw new Error("Produit introuvable.");
+  if (product.published !== current) return;
+  await prisma.product.update({ where: { id: productId }, data: { published: !current } });
+  revalidatePath("/admin");
+  revalidateProductViews(product.slug);
+}
+
+export async function toggleArchivedAction(productId: string, current: boolean) {
+  await requirePermission("products.archive");
+  const product = await prisma.product.findUnique({ where: { id: productId }, select: { slug: true, archived: true } });
+  if (!product) throw new Error("Produit introuvable.");
+  if (product.archived !== current) return;
+  await prisma.product.update({ where: { id: productId }, data: { archived: !current } });
+  revalidatePath("/admin");
+  revalidateProductViews(product.slug);
 }

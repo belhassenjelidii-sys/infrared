@@ -1,0 +1,5 @@
+ALTER TABLE "products"
+  ADD COLUMN IF NOT EXISTS "metaTitle" TEXT,
+  ADD COLUMN IF NOT EXISTS "metaDescription" TEXT,
+  ADD COLUMN IF NOT EXISTS "tags" TEXT,
+  ADD COLUMN IF NOT EXISTS "whatsappTitle" TEXT;

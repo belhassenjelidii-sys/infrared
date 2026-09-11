@@ -1,0 +1,5 @@
+ALTER TABLE "store_settings"
+  ADD COLUMN IF NOT EXISTS "aboutEyebrow" TEXT,
+  ADD COLUMN IF NOT EXISTS "aboutTitle" TEXT,
+  ADD COLUMN IF NOT EXISTS "aboutText" TEXT,
+  ADD COLUMN IF NOT EXISTS "aboutStatsJson" TEXT;

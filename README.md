@@ -1,160 +1,155 @@
 # InfraRed Optic-Store
 
-Site vitrine premium pour un opticien, construit avec Next.js (App Router),
-TypeScript et Tailwind CSS. Inspiré fonctionnellement de l'experience
-GrandOptical (catalogue, filtres, fiches produit, marques, promotions) mais
-avec une identite graphique 100% originale : rouge InfraRed + blanc.
+Site vitrine premium pour un opticien (3 boutiques à Tunis), construit avec
+Next.js (App Router), TypeScript, Tailwind CSS et PostgreSQL/Prisma.
 
-## Demarrage rapide (Windows)
-
-Double-cliquez sur `START.bat`, ou en ligne de commande :
+## Démarrage rapide
 
 ```bash
 npm install
+cp .env.example .env      # puis renseignez DATABASE_URL, AUTH_SECRET, Supabase…
+npx prisma migrate deploy # applique les migrations sur votre base
+npm run db:seed           # crée catégories/marques/produits/boutiques de démo + comptes
 npm run dev
 ```
 
-Le site est accessible sur http://localhost:3000
+Avant chaque livraison locale :
 
-Le site peut fonctionner sans base de donnees pour la vitrine : les pages
-publiques lisent des donnees de demonstration dans `src/lib/data.ts`
-(produits, marques, categories). C'est un vrai site fonctionnel, pas une
-maquette statique — recherche, filtres, tri, fiches produit, WhatsApp,
-Google Maps, etc. fonctionnent reellement.
+```bash
+npm test
+npm run lint
+npm run build
+npm run local:check
+```
 
-## A propos du logo
+`local:check` vérifie la base locale, la présence des photos produits et leur
+véritable transparence alpha. Les prix à confirmer et les services externes
+encore non configurés sont signalés comme avertissements sans bloquer le travail local.
 
-Le logo InfraRed fourni dans une conversation precedente n'etait pas
-accessible dans cette session. `src/components/Logo.tsx` contient une
-marque provisoire (rouge/blanc, motif "verres") utilisee partout : header,
-footer, favicon, dashboards. Remplacez ce composant par votre logo reel
-(SVG de preference) — un seul fichier a modifier pour que le logo change
-partout dans le site.
+Le site est accessible sur http://localhost:3000. `npm run db:seed` affiche
+dans la console un mot de passe temporaire pour chaque compte si
+`SEED_ADMIN_PASSWORD` / `SEED_COMMERCIAL_PASSWORD` / `SEED_DEVELOPER_PASSWORD`
+ne sont pas définis dans `.env` — changez-les depuis `/admin/utilisateurs`
+après la première connexion.
+
+Avec Docker :
+
+```bash
+docker compose up -d   # PostgreSQL local
+npm run db:migrate
+npm run db:seed
+```
 
 ## Stack
 
-- Frontend — Next.js 15 (App Router), React, TypeScript, Tailwind CSS v4
-- Base de donnees (prete, non branchee) — PostgreSQL via Prisma ORM,
-  schema compatible Supabase (`prisma/schema.prisma`)
-- Stockage images (prevu) — Supabase Storage
-- Deploiement (prepare) — Netlify
+- **Frontend** — Next.js (App Router), React 19, TypeScript, Tailwind CSS v4
+- **Base de données** — PostgreSQL via Prisma ORM
+- **Stockage images** — Supabase Storage (upload direct depuis l'admin/commercial,
+  via l'API REST Supabase — voir `src/lib/supabase-storage.ts`)
+- **Authentification** — session JWT (cookie httpOnly) + rôles `ADMIN` /
+  `DEVELOPER` / `COMMERCIAL`, vérifiés côté serveur sur chaque action
+  (`src/lib/authz.ts`)
+
+## Source unique de vérité
+
+Toutes les données métier (produits, marques, catégories, promotions,
+boutiques, paramètres du site) viennent de PostgreSQL via Prisma — il n'y a
+plus de données statiques utilisées par les pages publiques ou l'admin.
+`src/lib/data.ts` ne contient plus que le contenu de démonstration utilisé
+par `prisma/seed.ts` pour peupler une base vide.
+
+- `src/lib/catalogue-db.ts` — produits, marques, catégories
+- `src/lib/site-data.ts` — paramètres du site (StoreSettings) et boutiques
 
 ## Structure
 
 ```
 src/
   app/
-    page.tsx                 Accueil (hero, categories, incontournables)
-    catalogue/                /catalogue — recherche, filtres, tri
-    produit/[slug]/            /produit/[slug] — fiche produit
-    marques/                   /marques
-    promotions/                /promotions
-    nouveautes/                 /nouveautes
-    boutique/                   /boutique — adresse, horaires, carte
-    contact/                    /contact — formulaire + contacts directs
-    admin/                       /admin — scaffold dashboard (lecture seule)
-    commercial/                  /commercial — scaffold dashboard (lecture seule)
+    page.tsx                    Accueil
+    catalogue/                  Catalogue — recherche, filtres, tri
+    produit/[slug]/              Fiche produit + JSON-LD Product/Breadcrumb
+    marques/, promotions/, nouveautes/
+    boutique/                    Adresses, horaires, cartes Google Maps
+    contact/                     Formulaire (Server Action + DB) + contacts directs
+    mentions-legales/, confidentialite/
+    admin/                       Back-office complet (ADMIN/DEVELOPER, +COMMERCIAL
+                                  pour Boutiques/Paramètres/Messages)
+    commercial/                  Espace commercial (prix, dispo, photos)
+    api/uploads/                 Upload image → Supabase Storage (auth + rôle requis)
     sitemap.ts, robots.ts        SEO
-  components/                 Header, Footer, Logo, ProductCard, filtres…
-  lib/data.ts                 Donnees de demonstration + fonctions de requete
-  types/                       Types partages (Product, Brand, Category…)
+  components/
+  lib/
+    authz.ts                     Vérification de rôle centralisée (requireRole…)
+    supabase-storage.ts          Upload/suppression Supabase Storage (fetch natif)
+    catalogue-db.ts, site-data.ts  Accès DB (source unique de vérité)
+    data.ts                      Contenu de démonstration — seed uniquement
+  types/
 prisma/
-  schema.prisma                Modeles User, Product, ProductImage, Category, Brand…
-  seed.ts                      Peuple la base avec les memes donnees de demo
+  schema.prisma
+  seed.ts
 ```
+
+## Comptes créés par le seed
+
+| Rôle | Email | Accès |
+| --- | --- | --- |
+| ADMIN | admin@infrared.tn | Back-office complet |
+| DEVELOPER | dev@infrared.tn | Back-office complet (même périmètre qu'ADMIN) |
+| COMMERCIAL | marketing@infrared.tn | `/commercial` + Boutiques/Paramètres/Messages dans `/admin` |
 
 ## Design
 
-- Rouge InfraRed `#E0122C` — CTA, badges, accents
-- Blanc `#FFFFFF` — couleur dominante de l'interface
+- Rouge InfraRed `#E0122C` — utilisé comme accent (CTA, badges), jamais en fond permanent
 - Neutres : encre `#14110F`, brume `#F6F3F1`, ligne `#E7E2DE`
-- Typographie : Fraunces (display, editorial) + Inter (texte, UI)
-- Signature visuelle : motif "verres" (deux cercles relies), repris dans le
-  logo et en accent autour du visuel du hero (`.lens-ring`)
+- Typographie : Fraunces (display, éditorial) + Inter (texte, UI)
 
-## Ce qui est fonctionnel des maintenant
+## Production / configuration externe restante
 
-- **Vrai logo InfraRed** intégré (détouré, fond transparent) dans le header,
-  le footer, le favicon et les dashboards — un seul composant
-  `src/components/Logo.tsx` à modifier si besoin, fichiers sources dans
-  `public/logo.png` et `public/logo-mark.png`
-- **Plus aucune image Picsum.** Produits, catégories et boutiques sans
-  vraie photo affichent un placeholder honnête (`PlaceholderMedia`), jamais
-  une fausse photo presentee comme reelle. Le hero utilise un visuel
-  graphique original anime (`HeroVisual`), pas une photo volee.
-- Navigation complete, recherche, menu mobile anime, header qui se
-  compacte au scroll
-- Homepage restructuree dans l'esprit GrandOptical (sans le copier) :
-  Hero -> Categories -> Selection du moment -> Nouveautes -> Promotions ->
-  Marques -> Presentation InfraRed -> Nos boutiques -> Contact/WhatsApp/Instagram
-- Catalogue avec filtres (categorie, marque, genre, nouveaute, promotion),
-  tri, et **filtres mobiles en bottom sheet** anime (glisse depuis le bas)
-- Fiches produit avec galerie, **zoom au clic (lightbox)**, prix barre,
-  reduction, section "Vous pourriez aussi aimer"
-- Pages Marques (cartes premium), Promotions, Nouveautes, Boutiques (3
-  vraies adresses, cartes Google Maps, boutons Itineraire/WhatsApp)
-- **Dashboards admin/commercial pre-structures** (sidebar de navigation,
-  bandeau clair indiquant qu'ils ne sont pas encore fonctionnels) — voir
-  ci-dessous
-- SEO : metadata par page, Open Graph, sitemap.xml, robots.txt
-- Schema Prisma **conserve tel quel** (User/Role, Product, ProductImage,
-  Category, Brand, StoreSettings), pret pour PostgreSQL/Supabase
+Voir le rapport de livraison fourni séparément pour le détail, mais en
+résumé, avant mise en production :
 
-## A propos des marques et des photos
+1. Créer le bucket Supabase Storage (public, lecture seule) et renseigner
+   `NEXT_PUBLIC_SUPABASE_URL` / `SUPABASE_SERVICE_ROLE_KEY` / `SUPABASE_STORAGE_BUCKET`.
+2. Renseigner `DATABASE_URL`, `AUTH_SECRET` (valeur longue et aléatoire),
+   `NEXT_PUBLIC_SITE_URL` (votre domaine `.tn` définitif) dans `.env`.
+3. Définir `SEED_ADMIN_PASSWORD` / `SEED_COMMERCIAL_PASSWORD` /
+   `SEED_DEVELOPER_PASSWORD` avant de lancer le seed en production.
+4. Renseigner les coordonnées réelles (téléphone, WhatsApp, réseaux sociaux,
+   horaires) depuis `/admin/parametres`, et les boutiques depuis
+   `/admin/boutiques` — la page d'accueil et le footer les affichent
+   automatiquement dès qu'ils existent en base.
 
-- **Marques** : la liste actuelle (Carrera, Ray-Ban, Vogue, Polaroid, Emporio
-  Armani) reste une liste de demonstration — Facebook bloque le scraping
-  automatise et Instagram necessite une connexion, donc je n'ai pas pu
-  recuperer votre vraie liste de marques depuis ces pages. Donnez-moi la
-  liste et je mets a jour `brands` dans `src/lib/data.ts`.
-- **Photos** : idem, impossible d'extraire vos vraies photos produits ou de
-  boutique depuis les reseaux sociaux (acces bloque + droits d'auteur). Le
-  systeme de placeholders (`PlaceholderMedia`, flag `isPlaceholder`) est
-  concu pour qu'il suffise de renseigner une vraie URL par photo (Supabase
-  Storage) pour qu'elle s'affiche automatiquement partout, sans toucher au
-  design.
+## E-mail « mot de passe oublié »
+La configuration SMTP se fait depuis **Admin → Paramètres → Envoi d'e-mails**.
+Choisissez Gmail / Google Workspace ou Microsoft 365 / Outlook professionnel : le serveur, le port et le mode STARTTLS sont remplis automatiquement. Pour un hébergeur de domaine classique, choisissez **Autre hébergeur** et renseignez son serveur, port et mode SSL/TLS.
 
-## Dashboards admin / commercial — etat reel
+Le mot de passe SMTP est chiffré en base. Après configuration, utilisez **Envoyer un e-mail de test** avant de déployer.
 
-Ces ecrans **ne sont pas fonctionnels**, et le disent explicitement a
-l'ecran (bandeau + sidebar avec sections desactivees) :
+En production, `AUTH_SECRET` et `NEXT_PUBLIC_SITE_URL` doivent être renseignés.
 
-- `/admin` : structure prevue = Produits (affiche, lecture seule) / Marques /
-  Categories / Promotions / Utilisateurs / Parametres (ces 5 dernieres
-  sections sont visibles dans la sidebar mais desactivees)
-- `/commercial` : structure prevue = Produits (affiche) / Photos / Prix /
-  Disponibilite (desactivees)
-- Aucune vraie authentification, aucune vraie mutation de donnees pour
-  l'instant — ce sera l'etape suivante (voir "Prochaines etapes").
 
-## Prochaines etapes (non incluses dans cette premiere livraison)
+## Étape 6 — performances
+- Pagination serveur et index PostgreSQL dédiés au catalogue.
+- Recherche API protégée et annulation des requêtes obsolètes côté client.
+- Détection de doublons perceptuels accélérée par bucketing.
 
-Le cahier des charges complet couvre une plateforme e-commerce avec
-back-office multi-roles — c'est un projet a part entiere. Cette premiere
-livraison pose des bases solides et reellement fonctionnelles cote vitrine.
-Restent a brancher, dans l'ordre conseille :
+## Boutiques — version actuelle
 
-1. Connexion Prisma/PostgreSQL — creer `.env` a partir de
-   `.env.example`, lancer `npx prisma migrate dev`, puis `npx prisma db seed`.
-   Remplacer les fonctions de `src/lib/data.ts` par de vraies requetes
-   Prisma (les signatures de fonctions sont deja pensees pour ca).
-2. Authentification + RBAC — routes `/admin` et `/commercial`
-   actuellement en lecture seule et sans protection ; a securiser (ex.
-   Auth.js/NextAuth avec le modele `User` deja prevu, roles `ADMIN` /
-   `COMMERCIAL`).
-3. CRUD produits/marques/categories/promotions — API routes Next.js
-   (`src/app/api/...`) branchees sur Prisma, formulaires d'admin.
-4. Upload et gestion des images — Supabase Storage, compression,
-   reordonnancement, photo principale, suppression en cascade.
-5. Suppression definitive vs archivage — logique decrite dans le
-   cahier des charges (confirmation, purge Storage, verification des
-   orphelins).
-6. Deploiement Netlify — le projet est pret (Next.js standard, pas de
-   dependance serveur exotique), a connecter au depot GitHub prive une
-   fois pret.
+Les horaires sont configurés manuellement, boutique par boutique, dans `/admin/boutiques`.
+Le statut public est uniquement `Ouverte` ou `Fermée`. La carte Google Maps reste disponible pour l'itinéraire, mais aucune clé Google Places n'est nécessaire pour les horaires.
 
-## Qualite
+## Catalogue enrichi (pré-publication)
 
-`npm run build` et `npx tsc --noEmit` ont ete executes sans erreur avant
-la livraison. Toutes les routes publiques listees ci-dessus sont testees
-manuellement en local.
+Le seed comprend maintenant 17 produits, 10 marques et au moins 3 vues par produit. Pour appliquer les ajouts sur une base existante sans écraser les prix ni les galeries complètes déjà saisies dans l'admin :
+
+```bash
+npx prisma generate
+npm run db:seed
+```
+
+Les modèles ajoutés dont le prix tunisien n'est pas encore validé utilisent `0` et s'affichent comme **Prix en boutique**. Le dashboard accepte également `0` pour ce cas.
+
+Les photos produits mises en cache sont stockées sous
+`public/images/catalogue-real/`. Les deux vues contenant une personne sont
+explicitement exclues du script `catalogue:transparent`.

@@ -1,68 +1,16 @@
 import Link from "next/link";
-import { prisma } from "@/lib/prisma";
-import { getSession } from "@/lib/auth";
 import AdminShell from "@/components/AdminShell";
-import ImageUploadField from "@/components/ImageUploadField";
-import { createProductAction } from "./actions";
-
-export const dynamic = "force-dynamic";
-
-export default async function NewProductPage() {
-  const session = await getSession();
-  const [brands, categories] = await Promise.all([
-    prisma.brand.findMany({ where: { active: true }, orderBy: { name: "asc" } }),
-    prisma.category.findMany({ where: { active: true }, orderBy: { name: "asc" } }),
-  ]);
-
-  return (
-    <AdminShell active="/admin" name={session?.name} email={session?.email} role={session?.role}>
-      <Link href="/admin" className="text-sm text-stone hover:text-red">← Retour aux produits</Link>
-      <p className="eyebrow mt-5 text-red">Catalogue</p>
-      <h1 className="font-display mt-2 text-3xl">Ajouter une lunette</h1>
-
-      <form action={createProductAction} className="mt-8 grid gap-8 lg:grid-cols-[1fr_380px]">
-        <div className="space-y-5 rounded-2xl border border-line bg-white p-5 sm:p-7">
-          <div>
-            <label className="text-sm font-medium">Nom du modèle</label>
-            <input name="name" required placeholder="Ex. Carrera 1023/S" className="mt-1 min-h-11 w-full rounded-lg border border-line px-3 py-2 text-sm" />
-          </div>
-          <div>
-            <label className="text-sm font-medium">Référence</label>
-            <input name="reference" required placeholder="Ex. IR-CARRERA1023S" className="mt-1 min-h-11 w-full rounded-lg border border-line px-3 py-2 text-sm" />
-          </div>
-          <div>
-            <label className="text-sm font-medium">Description</label>
-            <textarea name="description" required rows={5} placeholder="Description du modèle…" className="mt-1 w-full rounded-lg border border-line px-3 py-2 text-sm" />
-          </div>
-
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div><label className="text-sm font-medium">Prix (DT)</label><input type="number" step="0.01" name="price" required className="mt-1 min-h-11 w-full rounded-lg border border-line px-3 py-2 text-sm" /></div>
-            <div><label className="text-sm font-medium">Ancien prix (promotion)</label><input type="number" step="0.01" name="oldPrice" className="mt-1 min-h-11 w-full rounded-lg border border-line px-3 py-2 text-sm" /></div>
-            <div><label className="text-sm font-medium">Couleur</label><input name="color" className="mt-1 min-h-11 w-full rounded-lg border border-line px-3 py-2 text-sm" /></div>
-            <div><label className="text-sm font-medium">Forme</label><select name="shape" className="mt-1 min-h-11 w-full rounded-lg border border-line px-3 py-2 text-sm">{["Rectangle","Carrée","Ronde","Ovale","Vintage"].map(x => <option key={x}>{x}</option>)}</select></div>
-            <div><label className="text-sm font-medium">Cible</label><select name="target" defaultValue="MIXTE" className="mt-1 min-h-11 w-full rounded-lg border border-line px-3 py-2 text-sm">{["HOMME","FEMME","MIXTE","ENFANT"].map(x => <option key={x}>{x}</option>)}</select></div>
-            <div><label className="text-sm font-medium">Catégorie</label><select name="categoryId" required className="mt-1 min-h-11 w-full rounded-lg border border-line px-3 py-2 text-sm">{categories.map(x => <option key={x.id} value={x.id}>{x.name}</option>)}</select></div>
-            <div className="sm:col-span-2"><label className="text-sm font-medium">Marque</label><select name="brandId" required className="mt-1 min-h-11 w-full rounded-lg border border-line px-3 py-2 text-sm">{brands.map(x => <option key={x.id} value={x.id}>{x.name}</option>)}</select></div>
-          </div>
-
-          <div className="flex flex-wrap gap-5 text-sm">
-            <label className="flex min-h-11 items-center gap-2"><input type="checkbox" name="available" defaultChecked /> Disponible</label>
-            <label className="flex min-h-11 items-center gap-2"><input type="checkbox" name="featured" /> Mis en avant</label>
-            <label className="flex min-h-11 items-center gap-2"><input type="checkbox" name="isNew" /> Nouveauté</label>
-          </div>
-        </div>
-
-        <div className="space-y-5">
-          <div className="rounded-2xl border border-line bg-white p-5">
-            <h2 className="font-display text-lg">Photo principale</h2>
-            <div className="mt-4">
-              <ImageUploadField name="imageUrl" label="Importer / coller l'image" />
-            </div>
-            <input name="imageAlt" placeholder="Texte alternatif" className="mt-3 min-h-11 w-full rounded-lg border border-line px-3 py-2 text-sm" />
-          </div>
-          <button className="min-h-12 w-full rounded-full bg-red px-6 text-sm font-medium text-white hover:bg-red-dark">Créer le produit</button>
-        </div>
-      </form>
-    </AdminShell>
-  );
+import VariantForm from "@/components/VariantForm";
+import {prisma} from "@/lib/prisma";
+import {requirePagePermission} from "@/lib/authz";
+import {can} from "@/lib/permissions";
+export default async function NewVariant({searchParams}:{searchParams:Promise<{model?:string;source?:string;mode?:string;q?:string;page?:string}>}){
+ const user=await requirePagePermission("products.create");const sp=await searchParams;const source=sp.source?await prisma.product.findUnique({where:{id:sp.source},include:{images:{orderBy:{sortOrder:"asc"}},productModel:true}}):null;
+ const modelId=sp.model??source?.productModelId;const model=modelId?await prisma.productModel.findUnique({where:{id:modelId},include:{brand:true}}):null;
+ const mode=sp.mode==="color"||sp.mode==="size"||sp.mode==="duplicate"?sp.mode:"new";
+ const page=Math.max(1,Math.min(100000,parseInt(sp.page??"1")||1));const query=(sp.q??"").slice(0,100);
+ const models=model?[model]:await prisma.productModel.findMany({where:{active:true,...(query?{OR:[{code:{contains:query,mode:"insensitive" as const}},{name:{contains:query,mode:"insensitive" as const}},{brand:{name:{contains:query,mode:"insensitive" as const}}}]}:{})},include:{brand:true},take:30,skip:(page-1)*30,orderBy:[{code:"asc"},{id:"asc"}]});
+ const label=mode==="color"?"Ajouter un coloris":mode==="size"?"Ajouter une taille":mode==="duplicate"?"Dupliquer l’article":"Ajouter un article";
+ return <AdminShell active="/admin/articles"><Link href="/admin/articles" className="text-sm text-stone">← Articles</Link><h1 className="my-6 text-3xl font-semibold">{label}</h1>{model?<><p className="mb-5 text-sm text-stone">{model.brand.name} · {model.code} · {model.name}</p><div className="max-w-5xl"><VariantForm product={source} model={model} models={models} user={user} mode={mode}/></div></>:<><p className="mb-5 text-sm text-stone">Choisissez le modèle de cette variante.{source&&!source.productModelId?" Cet ancien article n’est pas encore rattaché à un modèle. Ses données resteront conservées.":""}</p><form className="mb-5 flex flex-wrap gap-3"><input name="q" defaultValue={query} aria-label="Rechercher un modèle" placeholder="Rechercher un modèle" className="min-h-11 rounded-lg border bg-white px-3 text-sm"/>{sp.source&&<input type="hidden" name="source" value={sp.source}/>}<input type="hidden" name="mode" value={mode}/><button className="rounded-lg bg-ink px-4 text-white">Rechercher</button>{can(user,"models.create")&&<Link className="rounded-lg border bg-white px-4 py-3 text-sm" href="/admin/modeles/nouveau">Créer un modèle</Link>}</form><div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">{models.map(m=><Link key={m.id} href={`/admin/produits/nouveau?model=${m.id}&mode=${mode}${sp.source?`&source=${sp.source}`:""}`} className="rounded-xl border bg-white p-5 hover:border-red"><p className="text-xs text-stone">{m.brand.name}</p><p className="mt-2 font-semibold">{m.code}</p><p className="mt-1 text-sm">{m.name}</p></Link>)}</div>{models.length===0&&<p className="text-sm text-stone">Aucun modèle disponible. Créez un modèle pour commencer.</p>}<div className="mt-5 flex gap-5 text-sm">{page>1&&<Link href={`?page=${page-1}&q=${encodeURIComponent(query)}&mode=${mode}${sp.source?`&source=${sp.source}`:""}`}>Précédent</Link>}{models.length===30&&<Link href={`?page=${page+1}&q=${encodeURIComponent(query)}&mode=${mode}${sp.source?`&source=${sp.source}`:""}`}>Suivant</Link>}</div></>}</AdminShell>;
 }
+

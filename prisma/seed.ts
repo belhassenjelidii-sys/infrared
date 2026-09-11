@@ -1,7 +1,8 @@
 import { PrismaClient, Role, Target } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 import bcrypt from "bcryptjs";
-import { categories, brands, products, stores } from "../src/lib/data";
+import crypto from "node:crypto";
+import { categories, brands, products, stores, seedShopDefaults } from "../src/lib/data";
 
 const connectionString =
   process.env.DATABASE_URL ||
@@ -34,11 +35,38 @@ async function main() {
   }
 
   console.log("Seeding brands…");
+  const isSeedManagedBrandLogo = (url: string | null) => {
+    if (!url) return true;
+    if (url.startsWith("/images/brands/") || url.includes("placeholder")) return true;
+    try {
+      const host = new URL(url).hostname.toLowerCase();
+      return [
+        "commons.wikimedia.org",
+        "upload.wikimedia.org",
+        "visionsourceshowcase.luxottica.com",
+      ].includes(host);
+    } catch {
+      return false;
+    }
+  };
+
   for (const b of brands) {
+    const existingBrand = await prisma.brand.findUnique({
+      where: { slug: b.slug },
+      select: { id: true, logo: true },
+    });
+    const shouldRefreshLogo = !existingBrand || isSeedManagedBrandLogo(existingBrand.logo);
+
     await prisma.brand.upsert({
       where: { slug: b.slug },
-      update: { name: b.name, logo: b.logo, active: b.active },
-      create: { id: b.id, name: b.name, slug: b.slug, logo: b.logo, active: b.active },
+      update: {
+        name: b.name,
+        active: b.active,
+        heroWomenImage: b.heroWomenImage,
+        heroMenImage: b.heroMenImage,
+        ...(b.logo && shouldRefreshLogo ? { logo: b.logo } : {}),
+      },
+      create: { id: b.id, name: b.name, slug: b.slug, logo: b.logo, heroWomenImage: b.heroWomenImage, heroMenImage: b.heroMenImage, active: b.active },
     });
   }
 
@@ -51,24 +79,31 @@ async function main() {
       continue;
     }
 
+    const existingProduct = await prisma.product.findUnique({
+      where: { slug: p.slug },
+      select: { id: true },
+    });
+    const refreshPrices = ["1", "true", "yes"].includes(
+      (process.env.SEED_REFRESH_PRODUCT_PRICES || "").trim().toLowerCase(),
+    );
+
     const product = await prisma.product.upsert({
       where: { slug: p.slug },
       update: {
         name: p.name,
         reference: p.reference,
         description: p.description,
-        price: p.price,
-        oldPrice: p.oldPrice,
-        discount: p.discount,
         color: p.color,
         shape: p.shape ?? "Rectangle",
         target: toTarget(p.target),
         available: p.available,
         featured: p.featured,
         isNew: p.isNew,
-        isPromotion: p.isPromotion,
         categoryId: cat.id,
         brandId: br.id,
+        ...(refreshPrices
+          ? { price: p.price, oldPrice: p.oldPrice, discount: p.discount, isPromotion: p.isPromotion }
+          : {}),
       },
       create: {
         id: p.id,
@@ -92,21 +127,87 @@ async function main() {
       },
     });
 
-    // Real photos only — placeholder entries in src/lib/data.ts are a
-    // front-end-only concept (ProductImage has no isPlaceholder column in
-    // the DB), so they're simply not written here.
-    await prisma.productImage.deleteMany({ where: { productId: product.id } });
-    for (const img of p.images) {
-      if (img.isPlaceholder) continue;
-      await prisma.productImage.create({
-        data: {
-          id: img.id,
-          url: img.url,
-          alt: img.alt,
-          sortOrder: img.sortOrder,
-          productId: product.id,
-        },
-      });
+    // Seed images are refreshed automatically only when the product has no
+    // photos yet or still uses the old bundled SVG placeholders. This avoids
+    // deleting real photos an admin may already have uploaded manually. Set
+    // SEED_REFRESH_PRODUCT_IMAGES=true to intentionally replace them.
+    const currentImages = await prisma.productImage.findMany({
+      where: { productId: product.id },
+      select: { id: true, url: true, sortOrder: true },
+      orderBy: { sortOrder: "asc" },
+    });
+    const refreshImages = ["1", "true", "yes"].includes(
+      (process.env.SEED_REFRESH_PRODUCT_IMAGES || "").trim().toLowerCase(),
+    );
+    const isSeedManagedImage = (url: string) => {
+      if (url.startsWith("/images/products/") || url.startsWith("/images/catalogue-local/") || url.startsWith("/images/catalogue-real/") || url.includes("placeholder")) return true;
+      try {
+        const host = new URL(url).hostname.toLowerCase();
+        return [
+          "www.eye-oo.com",
+          "img.ebdcdn.com",
+          "vogue-eyewear.com",
+          "d237xocrarx9cy.cloudfront.net",
+          "assets.kogan.com",
+          "i.ebayimg.com",
+          "www.shadestation.co.uk",
+          "static5.lenskart.com",
+          "grandvision-media.imgix.net",
+          "assets2.oliverpeoples.com",
+        ].includes(host);
+      } catch {
+        return false;
+      }
+    };
+    const onlySeedManagedImages =
+      currentImages.length === 0 || currentImages.every(({ url }) => isSeedManagedImage(url));
+
+    if (!existingProduct || refreshImages || onlySeedManagedImages) {
+      await prisma.productImage.deleteMany({ where: { productId: product.id } });
+      for (const img of p.images) {
+        if (img.isPlaceholder) continue;
+        await prisma.productImage.create({
+          data: {
+            id: img.id,
+            url: img.url,
+            alt: img.alt,
+            sortOrder: img.sortOrder,
+            productId: product.id,
+          },
+        });
+      }
+    } else if (currentImages.length < 3) {
+      // Keep real photos uploaded from the dashboard and only complete the
+      // gallery up to three views with verified seed images.
+      const usedUrls = new Set(currentImages.map((img) => img.url));
+      const usedIds = new Set(currentImages.map((img) => img.id));
+      let nextSortOrder = currentImages.reduce((max, img) => Math.max(max, img.sortOrder), -1) + 1;
+      let count = currentImages.length;
+
+      for (const img of p.images) {
+        if (count >= 3) break;
+        if (img.isPlaceholder || usedUrls.has(img.url)) continue;
+
+        let imageId = `${p.id}-seed-extra-${img.sortOrder + 1}`;
+        let suffix = 2;
+        while (usedIds.has(imageId)) imageId = `${p.id}-seed-extra-${img.sortOrder + 1}-${suffix++}`;
+
+        await prisma.productImage.create({
+          data: {
+            id: imageId,
+            url: img.url,
+            alt: img.alt,
+            sortOrder: nextSortOrder++,
+            productId: product.id,
+          },
+        });
+        usedUrls.add(img.url);
+        usedIds.add(imageId);
+        count += 1;
+      }
+      console.log(`  ↳ ${p.slug}: galerie complétée à ${count} photo(s) sans écraser les uploads existants`);
+    } else {
+      console.log(`  ↳ ${p.slug}: 3+ photos existantes conservées (SEED_REFRESH_PRODUCT_IMAGES=false)`);
     }
   }
 
@@ -116,6 +217,7 @@ async function main() {
     const existing = await prisma.store.findFirst({ where: { name: st.name } });
     const data = {
       name: st.name,
+      slug: st.id, // data.ts ids are already slug-friendly ("kram", "tunisia-mall", "el-aouina")
       address: st.address,
       mobile: st.mobile,
       landline: st.landline,
@@ -133,47 +235,88 @@ async function main() {
   }
 
   console.log("Seeding settings…");
-  if (!(await prisma.storeSettings.findFirst())) {
+  const existingSettings = await prisma.storeSettings.findUnique({ where: { singletonKey: "main" } });
+  if (!existingSettings) {
     await prisma.storeSettings.create({
       data: {
+        singletonKey: "main",
+        phone: seedShopDefaults.phone,
+        whatsapp: seedShopDefaults.whatsapp,
+        instagram: seedShopDefaults.instagram,
+        facebook: seedShopDefaults.facebook,
+        address: seedShopDefaults.address,
+        mapsUrl: seedShopDefaults.mapsUrl,
+        hoursJson: JSON.stringify(seedShopDefaults.hours),
         heroTitle: "Découvrez votre prochaine paire.",
         heroSubtitle: "Montures solaires et optiques des plus grandes marques, dans nos boutiques InfraRed.",
         heroCtaLabel: "Découvrir nos lunettes",
+        heroMediaType: "image",
         accentColor: "#E0122C",
         categoryTitleSolaires: "Lunettes solaires",
         categoryTitleOptiques: "Lunettes optiques",
         categoryTitleNouveautes: "Nouveautés",
         showPrices: true,
+        aboutEnabled: true,
+        aboutEyebrow: "Depuis 2012",
+        aboutTitle: "L'opticien InfraRed, à Tunis",
+        aboutText:
+          "Plus de 10 ans d'expertise optique, une sélection exigeante des plus grandes marques et un conseil personnalisé dans chacune de nos boutiques.",
+        aboutStatsJson: JSON.stringify([
+          { title: "10+ ans d'expertise", text: "Une maison reconnue à Tunis." },
+          { title: "Grandes marques", text: "Carrera, Ray-Ban, Vogue, Polaroid, Emporio Armani…" },
+          { title: "Opticiens diplômés", text: "Examen de vue et montage sur mesure en boutique." },
+        ]),
+      },
+    });
+  } else {
+    // Preserve every value entered from the dashboard, but repair older
+    // local databases where the initial contact fields were left empty.
+    await prisma.storeSettings.update({
+      where: { id: existingSettings.id },
+      data: {
+        phone: existingSettings.phone?.trim() ? existingSettings.phone : seedShopDefaults.phone,
+        whatsapp: existingSettings.whatsapp?.trim() ? existingSettings.whatsapp : seedShopDefaults.whatsapp,
+        instagram: existingSettings.instagram?.trim() ? existingSettings.instagram : seedShopDefaults.instagram,
+        facebook: existingSettings.facebook?.trim() ? existingSettings.facebook : seedShopDefaults.facebook,
+        address: existingSettings.address?.trim() ? existingSettings.address : seedShopDefaults.address,
+        mapsUrl: existingSettings.mapsUrl?.trim() ? existingSettings.mapsUrl : seedShopDefaults.mapsUrl,
+        hoursJson: existingSettings.hoursJson?.trim()
+          ? existingSettings.hoursJson
+          : JSON.stringify(seedShopDefaults.hours),
       },
     });
   }
 
   console.log("Seeding users…");
-  const adminHash = await bcrypt.hash("Infrared2026!", 10);
-  const marketingHash = await bcrypt.hash("Marketing2026!", 10);
-  const devHash = await bcrypt.hash("Developer2026!", 10);
+  async function upsertUser(envVar: string, data: { name: string; email: string; role: Role }) {
+    const configured = process.env[envVar]?.trim();
+    const existing = await prisma.user.findUnique({ where: { email: data.email }, select: { id: true, passwordHash: true } });
 
-  // Single ADMIN account — no second admin is ever created by this app.
-  await prisma.user.upsert({
-    where: { email: "admin@infrared.tn" },
-    update: { passwordHash: adminHash, role: Role.ADMIN, active: true },
-    create: { name: "Admin InfraRed", email: "admin@infrared.tn", passwordHash: adminHash, role: Role.ADMIN, active: true },
-  });
+    if (existing) {
+      const update: { name: string; role: Role; active: boolean; passwordHash?: string } = {
+        name: data.name,
+        role: data.role,
+        active: true,
+      };
+      // Re-running the seed must NOT rotate an existing password unless an
+      // explicit password was provided through the environment.
+      if (configured && configured.length >= 8) update.passwordHash = await bcrypt.hash(configured, 10);
+      await prisma.user.update({ where: { id: existing.id }, data: update });
+      return;
+    }
 
-  // Marketing Digital & Commercial — pricing/photos/availability (/commercial)
-  // plus site content (Boutiques, Paramètres) under /admin.
-  await prisma.user.upsert({
-    where: { email: "marketing@infrared.tn" },
-    update: { passwordHash: marketingHash, role: Role.COMMERCIAL, active: true },
-    create: { name: "Marketing Digital & Commercial", email: "marketing@infrared.tn", passwordHash: marketingHash, role: Role.COMMERCIAL, active: true },
-  });
+    let password = configured;
+    if (!password || password.length < 8) {
+      password = crypto.randomBytes(12).toString("base64url");
+      console.warn(`⚠️  ${envVar} n'est pas défini (ou trop court) — mot de passe temporaire généré pour ${data.email} : ${password}`);
+    }
+    const passwordHash = await bcrypt.hash(password, 10);
+    await prisma.user.create({ data: { ...data, passwordHash, active: true } });
+  }
 
-  // Développeur — full back-office access, same scope as Admin.
-  await prisma.user.upsert({
-    where: { email: "dev@infrared.tn" },
-    update: { passwordHash: devHash, role: Role.DEVELOPER, active: true },
-    create: { name: "Développeur", email: "dev@infrared.tn", passwordHash: devHash, role: Role.DEVELOPER, active: true },
-  });
+  await upsertUser("SEED_ADMIN_PASSWORD", { name: "Admin InfraRed", email: "admin@infrared.tn", role: Role.SUPER_ADMIN });
+  await upsertUser("SEED_COMMERCIAL_PASSWORD", { name: "Marketing Digital & Commercial", email: "marketing@infrared.tn", role: Role.COMMERCIAL });
+  await upsertUser("SEED_DEVELOPER_PASSWORD", { name: "Développeur", email: "dev@infrared.tn", role: Role.DEVELOPER });
 
   console.log("Seed OK");
 }

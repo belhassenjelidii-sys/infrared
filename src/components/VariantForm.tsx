@@ -1,0 +1,31 @@
+import type { Prisma } from "@prisma/client";
+import type { SessionPayload } from "@/lib/session-edge";
+import { can } from "@/lib/permissions";
+import { SHAPES,MATERIALS,FRAME_TYPES } from "@/lib/catalogue-fields";
+import {saveVariantAction} from "@/app/admin/catalogue-actions";
+import ActionForm,{SubmitButton} from "./ActionForm";
+import {Field,Select,TextArea} from "./AdminFields";
+import VariantImages from "./VariantImages";
+import VariantAttributeSelectors from "./VariantAttributeSelectors";
+type Variant=Prisma.ProductGetPayload<{include:{images:true;productModel:true}}>;
+type Model=Prisma.ProductModelGetPayload<{include:{brand:true}}>;
+export default function VariantForm({product,model,models,user,mode="edit"}:{product?:Variant|null;model?:Model|null;models:Model[];user:SessionPayload;mode?:"edit"|"duplicate"|"color"|"size"|"new"}){
+ const editing=mode==="edit"&&Boolean(product);const p=product;const dimensions=mode==="size"?null:p;
+ const core=can(user,"products.edit")||!editing;
+ const selectModel=model?.id??p?.productModelId??"";
+ const yesNo=[{value:"true",label:"Oui"},{value:"false",label:"Non"}];
+ const ref=mode==="duplicate"||mode==="color"?"":p?.variantReference??p?.reference??"";
+ return <ActionForm action={saveVariantAction.bind(null,editing?p!.id:null)} className="grid gap-6 rounded-xl border border-line bg-white p-5 sm:p-7">
+  {core&&<><Select label={editing&&!p?.productModelId?"Rattacher à un modèle (optionnel pour cet ancien article)":"Modèle"} name="productModelId" value={selectModel} required={!editing} options={models.map(m=>({value:m.id,label:`${m.brand.name} · ${m.code} · ${m.name}`}))}/><Field label="Référence / code coloris" name="variantReference" value={ref} placeholder="001" required maxLength={80}/><VariantAttributeSelectors initialSize={mode==="size"?null:dimensions?.size} initialFrameColorFamily={mode==="color"?null:p?.frameColorFamily??p?.color} initialFrameColorLabel={mode==="color"?null:p?.frameColorLabel} initialLensColorFamily={mode==="color"?null:p?.lensColorFamily} initialLensColorLabel={mode==="color"?null:p?.lensColorLabel}/></>}
+  <div className="grid gap-4 sm:grid-cols-2">{can(user,"prices.edit")&&<Field label="Prix (DT) — 0 = prix en boutique" name="price" type="number" min={0} max={99999999} step="0.001" value={p?Number(p.price):0} required/>}{can(user,"stock.edit")&&<><Field label="Stock — vide = non renseigné" name="stock" type="number" min={0} max={1000000} value={editing?p?.stock:0}/><label className="flex items-center gap-2 text-sm"><input name="available" type="checkbox" defaultChecked={p?.available??false}/>Disponible si le stock est inconnu</label></>}</div>
+  {core&&<label className="flex min-h-11 items-center gap-2 text-sm font-medium"><input type="checkbox" name="published" defaultChecked={editing?p?.published:false}/>Publier sur le site</label>}
+  {can(user,"images.manage")&&<section><h2 className="mb-4 text-base font-semibold">Photos</h2><VariantImages initial={mode==="color"?[]:(p?.images??[]).map(im=>({...(editing?{id:im.id}:{}),url:im.url,alt:im.alt??""}))}/></section>}
+  <details className="rounded-lg border border-line p-4"><summary className="cursor-pointer text-sm font-semibold">Informations avancées</summary><div className="mt-5 grid gap-5">
+   {core&&<div className="grid gap-4 sm:grid-cols-2"><Field label="SKU (automatique si vide)" name="sku" value={editing?p?.sku:""}/><Field label="EAN-13" name="ean" value={editing?p?.ean:""} maxLength={13}/><Select label="Indice solaire" name="solarIndex" value={p?.solarIndex?.toString()} options={["0","1","2","3","4"]}/>{([['polarized','Polarisé'],['gradient','Dégradé'],['photochromic','Photochromique'],['mirrored','Miroir'],['prescriptionCompatible','Compatible correction']] as const).map(([key,label])=><Select key={key} label={label} name={key} value={p?.[key]==null?"":String(p[key])} options={yesNo}/>)}<Field label="Poids (g)" name="weight" type="number" min={1} max={1000} step="0.001" value={p?.weight?Number(p.weight):null}/><Select label="Forme personnalisée" name="shapeOverride" value={p?.shapeOverride} options={SHAPES} empty="Hériter du modèle"/><Select label="Matière personnalisée" name="materialOverride" value={p?.materialOverride} options={MATERIALS} empty="Hériter du modèle"/><input type="hidden" name="materialFamilyOverride" value={p?.materialFamilyOverride??""}/><Select label="Genre personnalisé" name="genderOverride" value={p?.genderOverride} options={["HOMME","FEMME","MIXTE","ENFANT"]} empty="Hériter du modèle"/><Select label="Monture personnalisée" name="frameTypeOverride" value={p?.frameTypeOverride} options={FRAME_TYPES} empty="Hériter du modèle"/><Field label="Style personnalisé" name="styleOverride" value={p?.styleOverride} placeholder="Vide = hériter du modèle"/><Field label="Hauteur verre (mm)" name="lensHeight" type="number" min={1} max={100} value={dimensions?.lensHeight}/><Field label="Largeur totale (mm)" name="totalWidth" type="number" min={50} max={250} value={dimensions?.totalWidth}/></div>}
+   {can(user,"prices.edit")&&<Field label="Ancien prix (DT)" name="oldPrice" type="number" min={0} step="0.001" value={p?.oldPrice?Number(p.oldPrice):null}/>}
+   {(can(user,"products.edit")||can(user,"content.manage"))&&<><TextArea label="Description spécifique (vide = description du modèle)" name="description" value={p?.description}/><input type="hidden" name="contentFlags" value="1"/><div className="flex flex-wrap gap-4 text-sm"><label><input name="featured" type="checkbox" defaultChecked={editing?p?.featured:false}/> Mis en avant</label><label><input name="isNew" type="checkbox" defaultChecked={editing?p?.isNew:false}/> Nouveauté</label></div></>}
+   {can(user,"seo.manage")&&<><Field label="Titre SEO" name="metaTitle" value={p?.metaTitle}/><TextArea label="Description SEO" name="metaDescription" value={p?.metaDescription}/><Field label="Tags" name="tags" value={p?.tags}/><Field label="Titre WhatsApp" name="whatsappTitle" value={p?.whatsappTitle}/>{editing?<p className="text-sm text-stone">URL conservée : /produit/{p?.slug}</p>:<Field label="Slug (automatique si vide)" name="slug"/>}</>}
+  </div></details><div><SubmitButton>{editing?"Enregistrer l’article":"Créer l’article"}</SubmitButton></div>
+ </ActionForm>;
+}
+

@@ -1,67 +1,14 @@
-import { prisma } from "@/lib/prisma";
-import { getSession } from "@/lib/auth";
+import {prisma} from "@/lib/prisma";
+import {requirePagePermission} from "@/lib/authz";
+import {can,isSystemAdmin,ROLE_LABELS,PERMISSIONS,type StaffRole} from "@/lib/permissions";
 import AdminShell from "@/components/AdminShell";
-import { createUserAction, toggleUserActiveAction } from "./actions";
-
-export const dynamic = "force-dynamic";
-
-export default async function AdminUsersPage() {
-  const session = await getSession();
-  const users = await prisma.user.findMany({ orderBy: { createdAt: "asc" } });
-
-  return (
-    <AdminShell active="/admin/utilisateurs" name={session?.name} email={session?.email} role={session?.role}>
-      <p className="eyebrow text-red">Gestion</p>
-      <h1 className="font-display mt-2 text-3xl">Utilisateurs</h1>
-
-      <div className="mt-8 grid gap-8 lg:grid-cols-[1fr_320px]">
-        <div className="overflow-hidden rounded-2xl border border-line bg-white">
-          <table className="w-full text-sm">
-            <thead className="border-b border-line bg-mist text-left text-xs uppercase tracking-wide text-stone">
-              <tr><th className="px-4 py-3">Nom</th><th className="px-4 py-3">Email</th><th className="px-4 py-3">Rôle</th><th className="px-4 py-3">Statut</th><th className="px-4 py-3 text-right">Action</th></tr>
-            </thead>
-            <tbody>
-              {users.map((u) => (
-                <tr key={u.id} className="border-b border-line last:border-0">
-                  <td className="px-4 py-3 font-medium">{u.name}</td>
-                  <td className="px-4 py-3 text-stone">{u.email}</td>
-                  <td className="px-4 py-3">
-                    <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${u.role === "ADMIN" ? "bg-red-soft text-red" : "bg-mist text-stone"}`}>
-                      {u.role === "ADMIN" ? "Admin" : u.role === "DEVELOPER" ? "Développeur" : "Marketing & Commercial"}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3">
-                    <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${u.active ? "bg-emerald-50 text-emerald-700" : "bg-mist text-stone"}`}>{u.active ? "Actif" : "Désactivé"}</span>
-                  </td>
-                  <td className="px-4 py-3 text-right">
-                    <form action={toggleUserActiveAction.bind(null, u.id, u.active)}>
-                      <button disabled={u.id === session?.userId || u.role === "ADMIN"} className="rounded-full border border-line px-3 py-1.5 text-xs hover:border-red hover:text-red disabled:cursor-not-allowed disabled:opacity-40">
-                        {u.active ? "Désactiver" : "Activer"}
-                      </button>
-                    </form>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-
-        <form action={createUserAction} className="h-fit space-y-3 rounded-2xl border border-line bg-white p-5">
-          <h3 className="font-display text-lg">+ Nouvel utilisateur</h3>
-          <input name="name" placeholder="Nom complet" required className="w-full rounded-lg border border-line px-3 py-2 text-sm" />
-          <input name="email" type="email" placeholder="Email" required className="w-full rounded-lg border border-line px-3 py-2 text-sm" />
-          <input name="password" type="password" placeholder="Mot de passe (8+ caractères)" required minLength={8} className="w-full rounded-lg border border-line px-3 py-2 text-sm" />
-          <select name="role" className="w-full rounded-lg border border-line px-3 py-2 text-sm">
-            <option value="COMMERCIAL">Marketing Digital &amp; Commercial</option>
-            <option value="DEVELOPER">Développeur (accès complet)</option>
-          </select>
-          <p className="text-[11px] text-stone">
-            Un seul compte Admin existe pour ce projet — il n&apos;est pas
-            possible d&apos;en créer un second ici.
-          </p>
-          <button className="w-full rounded-full bg-red py-2.5 text-sm font-medium text-white hover:bg-red-dark">Créer</button>
-        </form>
-      </div>
-    </AdminShell>
-  );
+import ActionForm,{SubmitButton} from "@/components/ActionForm";
+import {Field,Select} from "@/components/AdminFields";
+import {saveStaffAction,saveUserPermissionsAction,deleteStaffAction} from "./manage-actions";
+import ConfirmSubmitButton from "@/components/ConfirmSubmitButton";
+export const dynamic="force-dynamic";
+export default async function Users(){
+ const actor=await requirePagePermission("users.view");const users=await prisma.user.findMany({orderBy:{createdAt:"desc"},take:100,select:{id:true,name:true,email:true,role:true,active:true,lastLoginAt:true,permissionOverrides:true}});
+ const roles=Object.entries(ROLE_LABELS).filter(([role])=>role!=="DEVELOPER"&&(isSystemAdmin(actor)||!isSystemAdmin({role}))).map(([value,label])=>({value,label}));
+ return <AdminShell active="/admin/utilisateurs"><h1 className="text-3xl font-semibold">Utilisateurs</h1><p className="mt-2 text-sm text-stone">Accès de l’équipe, rôles et permissions individuelles.</p>{can(actor,"users.create")&&<details className="my-6 rounded-xl border bg-white p-5"><summary className="cursor-pointer font-semibold">Créer un utilisateur</summary><ActionForm action={saveStaffAction.bind(null,null)} className="mt-5 grid gap-4"><div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4"><Field name="name" label="Nom" required/><Field name="email" label="Email" type="email" required/><Field name="password" label="Mot de passe" type="password" required/><Select name="role" label="Rôle" options={roles} value="COMMERCIAL" required/></div><label className="text-sm"><input type="checkbox" name="active" defaultChecked/> Compte actif</label><div><SubmitButton>Créer l’utilisateur</SubmitButton></div></ActionForm></details>}<div className="mt-6 grid gap-4">{users.map(u=>{const editable=can(actor,"users.edit")&&(!isSystemAdmin(u)||isSystemAdmin(actor));const overrides=(u.permissionOverrides??{})as Record<string,boolean>;return <section key={u.id} className="rounded-xl border bg-white p-5"><div className="flex flex-wrap justify-between gap-4"><div><h2 className="font-semibold">{u.name}</h2><p className="mt-1 text-sm text-stone">{u.email}</p></div><div className="text-sm"><p>{ROLE_LABELS[u.role as StaffRole]} · {u.active?"Actif":"Désactivé"}</p><p className="mt-1 text-xs text-stone">Dernière connexion : {u.lastLoginAt?u.lastLoginAt.toLocaleString("fr-TN"):"Non disponible"}</p></div></div>{editable&&<details className="mt-4 border-t pt-4"><summary className="cursor-pointer text-sm font-medium">Modifier le compte</summary><ActionForm action={saveStaffAction.bind(null,u.id)} className="mt-4 grid gap-4"><div className="grid gap-4 sm:grid-cols-2"><Field name="name" label="Nom" value={u.name} required/><Field name="email" label="Email" type="email" value={u.email} required/><Select name="role" label="Rôle" value={u.role} options={u.role==="DEVELOPER"?[...roles,{value:"DEVELOPER",label:ROLE_LABELS.DEVELOPER}]:roles} required/><Field name="password" label="Nouveau mot de passe (laisser vide pour conserver)" type="password"/></div><label className="text-sm"><input type="checkbox" name="active" defaultChecked={u.active}/> Compte actif</label><div><SubmitButton>Enregistrer le compte</SubmitButton></div></ActionForm></details>}{can(actor,"roles.manage")&&!isSystemAdmin(u)&&<details className="mt-4 border-t pt-4"><summary className="cursor-pointer text-sm font-medium">Permissions individuelles</summary><ActionForm action={saveUserPermissionsAction.bind(null,u.id)} className="mt-4 grid gap-4"><div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">{PERMISSIONS.map(p=><Select key={p} label={p} name={p} value={overrides[p]===true?"allow":overrides[p]===false?"deny":"inherit"} options={[{value:"inherit",label:"Hériter du rôle"},{value:"allow",label:"Autoriser"},{value:"deny",label:"Refuser"}]}/>)}</div><div><SubmitButton>Enregistrer les permissions</SubmitButton></div></ActionForm></details>}{can(actor,"users.delete")&&u.id!==actor.userId&&<ActionForm action={deleteStaffAction.bind(null,u.id)} className="mt-4 border-t pt-4"><ConfirmSubmitButton confirmMessage={`Supprimer définitivement le compte de ${u.name} ?`} className="text-sm text-red">Supprimer l’utilisateur</ConfirmSubmitButton></ActionForm>}</section>})}</div></AdminShell>;
 }

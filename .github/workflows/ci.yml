@@ -1,0 +1,26 @@
+name: Verify
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    env:
+      AUTH_SECRET: ci-only-secret-at-least-thirty-two-characters
+      DATABASE_URL: postgresql://infrared:ci-password@localhost:5432/infrared
+      NEXT_PUBLIC_SITE_URL: https://example.test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      - run: npm test
+      - run: npm run build

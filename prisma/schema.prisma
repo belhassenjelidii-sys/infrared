@@ -11,6 +11,8 @@ datasource db {
 }
 
 enum Role {
+  SUPER_ADMIN
+  MARKETING
   ADMIN
   COMMERCIAL
   DEVELOPER
@@ -23,17 +25,42 @@ enum Target {
   ENFANT
 }
 
+enum ProductType {
+  SUNGLASSES
+  OPTICAL
+}
+
 model User {
-  id           String   @id @default(cuid())
-  name         String
-  email        String   @unique
-  passwordHash String
-  role         Role     @default(COMMERCIAL)
-  active       Boolean  @default(true)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id                  String               @id @default(cuid())
+  name                String
+  email               String               @unique
+  passwordHash        String
+  role                Role                 @default(COMMERCIAL)
+  active              Boolean              @default(true)
+  authVersion         Int                  @default(0)
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+  passwordResetTokens PasswordResetToken[]
+  permissionOverrides Json?
+  lastLoginAt DateTime?
+  orderNotificationsSeenAt DateTime?
+  auditLogs AuditLog[]
 
   @@map("users")
+}
+
+model PasswordResetToken {
+  id        String    @id @default(cuid())
+  tokenHash String    @unique
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@map("password_reset_tokens")
 }
 
 model Category {
@@ -44,47 +71,102 @@ model Category {
   image       String?
   active      Boolean   @default(true)
   products    Product[]
+  productModels ProductModel[]
 
   @@map("categories")
 }
 
 model Brand {
-  id       String    @id @default(cuid())
-  name     String
-  slug     String    @unique
-  logo     String?
-  active   Boolean   @default(true)
-  products Product[]
+  id             String    @id @default(cuid())
+  name           String
+  slug           String    @unique
+  logo           String?
+  marqueeImage   String?
+  heroWomenImage String?
+  heroMenImage   String?
+  heroWomenTitle String?
+  heroMenTitle   String?
+  heroWomenText  String?
+  heroMenText    String?
+  active         Boolean   @default(true)
+  products       Product[]
+  productModels ProductModel[]
 
   @@map("brands")
 }
 
 model Product {
-  id           String         @id @default(cuid())
-  name         String
-  slug         String         @unique
-  reference    String         @unique
-  description  String
-  price        Decimal        @db.Decimal(10, 2)
-  oldPrice     Decimal?       @db.Decimal(10, 2)
-  discount     Int?
-  categoryId   String
-  category     Category       @relation(fields: [categoryId], references: [id])
-  brandId      String
-  brand        Brand          @relation(fields: [brandId], references: [id])
-  color        String?
-  shape        String?
-  target       Target         @default(MIXTE)
-  available    Boolean        @default(true)
-  featured     Boolean        @default(false)
-  isNew        Boolean        @default(false)
-  isPromotion  Boolean        @default(false)
-  archived     Boolean        @default(false)
-  published    Boolean        @default(true)
-  images       ProductImage[]
-  createdAt    DateTime       @default(now())
-  updatedAt    DateTime       @updatedAt
+  id              String         @id @default(cuid())
+  productModelId String?
+  productModel ProductModel? @relation(fields: [productModelId], references: [id], onDelete: Restrict)
+  type ProductType?
+  sku String? @unique
+  ean String? @unique
+  variantReference String?
+  frameColorLabel String?
+  frameColorFamily String?
+  lensColorLabel String?
+  lensColorFamily String?
+  size String?
+  lensWidth Int?
+  bridgeWidth Int?
+  templeLength Int?
+  lensHeight Int?
+  totalWidth Int?
+  commercialSize String?
+  solarIndex Int?
+  polarized Boolean?
+  gradient Boolean?
+  photochromic Boolean?
+  mirrored Boolean?
+  prescriptionCompatible Boolean?
+  weight Decimal? @db.Decimal(8, 3)
+  shapeOverride String?
+  materialOverride String?
+  materialFamilyOverride String?
+  genderOverride Target?
+  frameTypeOverride String?
+  styleOverride String?
+  stock Int?
+  cartItems CartItem[]
+  orderItems OrderItem[]
+  name            String
+  slug            String         @unique
+  reference       String         @unique
+  description     String
+  price           Decimal        @db.Decimal(12, 3)
+  oldPrice        Decimal?       @db.Decimal(12, 3)
+  discount        Int?
+  categoryId      String
+  category        Category       @relation(fields: [categoryId], references: [id])
+  brandId         String
+  brand           Brand          @relation(fields: [brandId], references: [id])
+  color           String?
+  shape           String?
+  target          Target         @default(MIXTE)
+  available       Boolean        @default(true)
+  featured        Boolean        @default(false)
+  isNew           Boolean        @default(false)
+  isPromotion     Boolean        @default(false)
+  archived        Boolean        @default(false)
+  published       Boolean        @default(true)
+  /// Local Product Intelligence metadata — see
+  /// src/lib/product-intelligence/metadata-generator.ts. Optional: when
+  /// null, the public product page falls back to generating on the fly
+  /// from name/description/brand/etc (see generateMetadata() in
+  /// src/app/produit/[slug]/page.tsx).
+  metaTitle       String?
+  metaDescription String?
+  tags            String? // comma-separated
+  whatsappTitle   String?
+  images          ProductImage[]
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
 
+  @@index([productModelId])
+  @@index([type])
+  @@index([archived, published, createdAt])
+  @@index([stock])
   @@index([categoryId])
   @@index([brandId])
   @@map("products")
@@ -97,47 +179,305 @@ model ProductImage {
   url       String
   alt       String?
   sortOrder Int     @default(0)
+  /// 64-bit perceptual hash (aHash), hex-encoded — precomputed once at
+  /// upload time so similarity checks never re-fetch/re-decode every
+  /// existing product's image file, only compare small stored strings.
+  /// See src/lib/product-intelligence/duplicate-detector.ts.
+  phash     String?
 
   @@index([productId])
+  @@index([phash])
   @@map("product_images")
 }
 
 model StoreSettings {
-  id         String  @id @default(cuid())
-  logoUrl    String?
-  phone      String?
-  whatsapp   String?
-  instagram  String?
-  facebook   String?
-  address    String?
-  mapsUrl    String?
-  hoursJson  String? // JSON-encoded opening hours
+  id           String  @id @default(cuid())
+  singletonKey String  @unique @default("main")
+  logoUrl      String?
+  logoHeight   Int     @default(42)
+  phone        String?
+  whatsapp     String?
+  instagram    String?
+  facebook     String?
+  address      String?
+  mapsUrl      String?
+  hoursJson    String? // JSON-encoded opening hours
 
   // Homepage banner — editable from /admin/parametres
-  heroTitle    String?
-  heroSubtitle String?
-  heroCtaLabel String?
-  accentColor  String? // hex, e.g. "#E0122C"
-  heroImageUrl String?
-  categoryTitleSolaires String?
-  categoryTitleOptiques String?
+  heroTitle               String?
+  heroSubtitle            String?
+  heroCtaLabel            String?
+  accentColor             String? // hex, e.g. "#E0122C"
+  heroImageUrl            String?
+  heroVideoUrl            String?
+  heroMediaType           String  @default("image") // "image" | "video"
+  // Hero visual placement: scale in percent and X/Y offsets in percent.
+  heroMediaScale          Int     @default(125)
+  heroMediaX              Int     @default(0)
+  heroMediaY              Int     @default(0)
+  categoryTitleSolaires   String?
+  categoryTitleOptiques   String?
   categoryTitleNouveautes String?
-  showPrices Boolean @default(true)
+  homeTrendEyebrow        String?
+  homeTrendTitle          String?
+  homeTrendProductIds     String?
+  homeContentJson         String?
+  showPrices              Boolean @default(true)
+  lowStockThreshold       Int     @default(5)
+  features Json?
+
+  // "Pourquoi InfraRed" band — merged into the footer, fully editable from
+  // /admin/parametres. aboutStatsJson holds up to 3 {title, text} entries.
+  aboutEyebrow   String?
+  aboutTitle     String?
+  aboutText      String?
+  aboutStatsJson String?
+  aboutEnabled   Boolean @default(true)
+
+  // SMTP configuration is managed from /admin/parametres. The SMTP password
+  // is stored encrypted (never in plaintext) in smtpPasswordEncrypted.
+  smtpProvider          String?
+  smtpHost              String?
+  smtpPort              Int?
+  smtpSecure            Boolean @default(false)
+  smtpUser              String?
+  smtpPasswordEncrypted String?
+  smtpFromEmail         String?
+  smtpFromName          String?
+
+  // Online payment credentials. New integrations charge exclusively in TND.
+  // Secrets are encrypted at rest and are never rendered in the admin UI.
+  paymentProvider             String?
+  paymentMode                 String  @default("sandbox")
+  paymentPublicKey            String?
+  paymentSecretEncrypted      String?
+  paymentMerchantId           String?
+  paymentApiBaseUrl           String?
+  paypalClientId              String?
+  paypalClientSecretEncrypted String?
+  paypalCurrency              String  @default("EUR")
+  paypalTndPerUnit            Decimal? @db.Decimal(12, 6)
+  deliveryCompanyName         String?
+  deliveryCompanyPhone        String?
+  deliveryCompanyWebsite      String?
+  deliveryCompanyAccount      String?
 
   @@map("store_settings")
 }
 
 model Store {
-  id            String  @id @default(cuid())
-  name          String
-  address       String
-  mobile        String
-  landline      String?
-  mapsUrl       String?
+  id             String  @id @default(cuid())
+  name           String
+  slug           String  @unique
+  address        String
+  mobile         String
+  landline       String?
+  mapsUrl        String?
   mapsEmbedQuery String?
-  photo         String?
-  sortOrder     Int     @default(0)
-  active        Boolean @default(true)
+  photo          String?
+  sortOrder      Int     @default(0)
+  active         Boolean @default(true)
+  hoursJson      String? // Horaires manuels propres à cette boutique
 
+  // Legacy Google fields kept for backward-compatible databases; no longer used by the app.
+  // Opening-hours source and live status controls. These columns are added by
+  // the 20260829150000_store_google_hours_status migration.
+  googlePlaceId       String?
+  hoursSource         String    @default("site") // "site" | "google"
+  googleHoursJson     String?
+  googleHoursSyncedAt DateTime?
+  statusOverride      String    @default("auto") // "auto" | "open" | "closed"
+
+  @@index([active, sortOrder])
   @@map("stores")
+}
+
+model ContactMessage {
+  id        String   @id @default(cuid())
+  name      String
+  email     String
+  phone     String?
+  message   String
+  handled   Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
+  @@map("contact_messages")
+}
+
+model RateLimitBucket {
+  key       String   @id
+  count     Int
+  resetAt   DateTime
+  updatedAt DateTime @updatedAt
+
+  @@index([resetAt])
+  @@map("rate_limit_buckets")
+}
+
+/// Caches the result of the *expensive* catalog-health checks (per-image
+/// HTTP HEAD requests to detect broken/oversized files). Cheap checks
+/// (missing fields, no category/brand, unavailable, etc.) are plain
+/// Prisma aggregate queries and are always computed fresh — only the
+/// network-bound image checks are cached here, refreshed on demand from
+/// /admin (see src/lib/catalog-health/).
+model CatalogHealthSnapshot {
+  id            String   @id @default(cuid())
+  computedAt    DateTime @default(now())
+  imagesChecked Int      @default(0)
+  brokenImages  Int      @default(0)
+  heavyImages   Int      @default(0)
+  /// JSON array of { productId, productName, imageId, imageUrl, issue, sizeBytes? }
+  detailsJson   String?
+
+  @@map("catalog_health_snapshots")
+}
+
+// Product remains the sellable variant, preserving existing product/image IDs and URLs.
+model ProductModel {
+  id String @id @default(cuid())
+  brandId String
+  brand Brand @relation(fields: [brandId], references: [id], onDelete: Restrict)
+  categoryId String
+  category Category @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  type ProductType
+  code String
+  name String
+  collection String?
+  shape String?
+  materialLabel String?
+  materialFamily String?
+  gender Target @default(MIXTE)
+  frameType String?
+  style String?
+  description String?
+  active Boolean @default(true)
+  variants Product[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@unique([brandId, code, type])
+  @@index([categoryId])
+  @@index([type, active, createdAt])
+  @@map("product_models")
+}
+
+model RolePolicy {
+  role Role @id
+  permissions String[]
+  updatedAt DateTime @updatedAt
+  @@map("role_policies")
+}
+
+model AuditLog {
+  id String @id @default(cuid())
+  actorId String?
+  actor User? @relation(fields: [actorId], references: [id], onDelete: SetNull)
+  action String
+  entityType String
+  entityId String?
+  before Json?
+  after Json?
+  createdAt DateTime @default(now())
+  @@index([actorId, createdAt])
+  @@index([entityType, entityId, createdAt])
+  @@map("audit_logs")
+}
+
+// Future commerce only: no public buying or payment routes are activated.
+model Cart {
+  id String @id @default(cuid())
+  items CartItem[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@map("carts")
+}
+
+model CartItem {
+  id String @id @default(cuid())
+  cartId String
+  cart Cart @relation(fields: [cartId], references: [id], onDelete: Cascade)
+  variantId String
+  variant Product @relation(fields: [variantId], references: [id], onDelete: Restrict)
+  quantity Int
+  unitPrice Decimal @db.Decimal(12, 3)
+  currency String @default("TND")
+  @@unique([cartId, variantId])
+  @@index([variantId])
+  @@map("cart_items")
+}
+
+model Order {
+  id String @id @default(cuid())
+  number String @unique
+  status String @default("DRAFT")
+  customerSnapshot Json
+  fulfillmentSnapshot Json?
+  paymentMethod String?
+  paymentStatus String?
+  externalPaymentId String?
+  deliveryCompanyId String?
+  deliveryCompany DeliveryCompany? @relation(fields: [deliveryCompanyId], references: [id], onDelete: SetNull)
+  trackingNumber String?
+  total Decimal @db.Decimal(12, 3)
+  currency String @default("TND")
+  items OrderItem[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@index([status, createdAt])
+  @@index([externalPaymentId])
+  @@index([deliveryCompanyId])
+  @@map("orders")
+}
+
+model DeliveryCompany {
+  id          String   @id @default(cuid())
+  name        String
+  phone       String?
+  website     String?
+  accountCode String?
+  active      Boolean  @default(true)
+  orders      Order[]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([active, name])
+  @@map("delivery_companies")
+}
+
+model OnlinePaymentSession {
+  id                  String   @id
+  cartId              String
+  paypalOrderId       String   @unique
+  provider             String   @default("PAYPAL")
+  externalPaymentId   String?  @unique
+  customerSnapshot    Json
+  fulfillmentSnapshot Json?
+  amountTnd           Decimal  @db.Decimal(12, 3)
+  amountPayPal        Decimal  @db.Decimal(12, 2)
+  currency            String
+  expiresAt           DateTime
+  createdAt           DateTime @default(now())
+
+  @@index([expiresAt])
+  @@map("online_payment_sessions")
+}
+
+model OrderItem {
+  id String @id @default(cuid())
+  orderId String
+  order Order @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  variantId String?
+  variant Product? @relation(fields: [variantId], references: [id], onDelete: SetNull)
+  productName String
+  brandName String
+  modelCode String?
+  reference String
+  size String?
+  frameColor String?
+  lensColor String?
+  unitPrice Decimal @db.Decimal(12, 3)
+  quantity Int
+  @@index([orderId])
+  @@index([variantId])
+  @@map("order_items")
 }

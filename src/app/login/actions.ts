@@ -1,6 +1,8 @@
 "use server";
 
 import { redirect } from "next/navigation";
+import { headers } from "next/headers";
+import { consumeRateLimit } from "@/lib/security/rate-limit";
 import { authenticate, createSessionToken, setSessionCookie, clearSessionCookie } from "@/lib/auth";
 
 export type LoginState = { error?: string };
@@ -11,6 +13,13 @@ export async function loginAction(
 ): Promise<LoginState> {
   const email = String(formData.get("email") || "").trim().toLowerCase();
   const password = String(formData.get("password") || "");
+  const requestHeaders = await headers();
+  const ip = requestHeaders.get("x-forwarded-for")?.split(",", 1)[0]?.trim() || requestHeaders.get("x-real-ip")?.trim() || "unknown";
+  const rate = await consumeRateLimit(`login:${ip}:${email}`, 10, 10 * 60 * 1000);
+
+  if (!rate.ok) {
+    return { error: `Trop de tentatives. Réessayez dans ${Math.max(1, rate.retryAfterSec)} seconde(s).` };
+  }
 
   if (!email || !password) {
     return { error: "Email et mot de passe requis." };
@@ -24,7 +33,7 @@ export async function loginAction(
   const token = await createSessionToken(user);
   await setSessionCookie(token);
 
-  redirect(user.role === "ADMIN" || user.role === "DEVELOPER" ? "/admin" : "/commercial");
+  redirect("/admin");
 }
 
 export async function logoutAction() {

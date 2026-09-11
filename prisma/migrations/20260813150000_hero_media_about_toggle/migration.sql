@@ -1,0 +1,4 @@
+ALTER TABLE "store_settings"
+  ADD COLUMN IF NOT EXISTS "heroVideoUrl" TEXT,
+  ADD COLUMN IF NOT EXISTS "heroMediaType" TEXT NOT NULL DEFAULT 'image',
+  ADD COLUMN IF NOT EXISTS "aboutEnabled" BOOLEAN NOT NULL DEFAULT true;
