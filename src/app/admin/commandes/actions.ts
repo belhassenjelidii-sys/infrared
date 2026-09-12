@@ -15,16 +15,22 @@ export async function updateOrderStatusAction(orderId:string,_state:ActionResult
 export async function updateOrderDeliveryAction(orderId:string,_state:ActionResult,formData:FormData):Promise<ActionResult>{
   const actor=await requirePermission("orders.edit");
   try{
-    const deliveryCompanyId=String(formData.get("deliveryCompanyId")??"").trim()||null;
+    const provider=String(formData.get("deliveryProvider")??"").trim();
+    const deliveryCompanyId=provider&&provider!=="manual"?provider:null;
+    const manualDeliveryFirstName=provider==="manual"?String(formData.get("manualDeliveryFirstName")??"").trim().slice(0,80):null;
+    const manualDeliveryLastName=provider==="manual"?String(formData.get("manualDeliveryLastName")??"").trim().slice(0,80):null;
+    const manualDeliveryPhone=provider==="manual"?String(formData.get("manualDeliveryPhone")??"").trim().slice(0,40):null;
     const trackingNumber=String(formData.get("trackingNumber")??"").trim().slice(0,120)||null;
+    if(provider==="manual"&&(!manualDeliveryFirstName||!manualDeliveryLastName||!manualDeliveryPhone))throw new Error("Renseignez le prénom, le nom et le téléphone du livreur.");
+    if(manualDeliveryPhone&&!/^\+?[0-9 ()-]{6,40}$/.test(manualDeliveryPhone))throw new Error("Téléphone du livreur invalide.");
     if(deliveryCompanyId){
       const company=await prisma.deliveryCompany.findFirst({where:{id:deliveryCompanyId,active:true},select:{id:true}});
       if(!company)throw new Error("Société de livraison introuvable ou désactivée.");
     }
-    const before=await prisma.order.findUniqueOrThrow({where:{id:orderId},select:{deliveryCompanyId:true,trackingNumber:true,number:true}});
+    const before=await prisma.order.findUniqueOrThrow({where:{id:orderId},select:{deliveryCompanyId:true,manualDeliveryFirstName:true,manualDeliveryLastName:true,manualDeliveryPhone:true,trackingNumber:true,number:true}});
     await prisma.$transaction([
-      prisma.order.update({where:{id:orderId},data:{deliveryCompanyId,trackingNumber}}),
-      prisma.auditLog.create({data:{actorId:actor.userId,action:"order.delivery.update",entityType:"Order",entityId:orderId,before:{deliveryCompanyId:before.deliveryCompanyId,trackingNumber:before.trackingNumber},after:{deliveryCompanyId,trackingNumber,number:before.number}}}),
+      prisma.order.update({where:{id:orderId},data:{deliveryCompanyId,manualDeliveryFirstName,manualDeliveryLastName,manualDeliveryPhone,trackingNumber}}),
+      prisma.auditLog.create({data:{actorId:actor.userId,action:"order.delivery.update",entityType:"Order",entityId:orderId,before:{deliveryCompanyId:before.deliveryCompanyId,manualDeliveryFirstName:before.manualDeliveryFirstName,manualDeliveryLastName:before.manualDeliveryLastName,manualDeliveryPhone:before.manualDeliveryPhone,trackingNumber:before.trackingNumber},after:{deliveryCompanyId,manualDeliveryFirstName,manualDeliveryLastName,manualDeliveryPhone,trackingNumber,number:before.number}}}),
     ]);
     revalidatePath(`/admin/commandes/${orderId}`);
     revalidatePath(`/admin/commandes/${orderId}/imprimer`);

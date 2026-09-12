@@ -1,22 +1,22 @@
 ALTER TABLE "store_settings"
-ADD COLUMN "paymentProvider" TEXT,
-ADD COLUMN "paymentMode" TEXT NOT NULL DEFAULT 'sandbox',
-ADD COLUMN "paypalClientId" TEXT,
-ADD COLUMN "paypalClientSecretEncrypted" TEXT,
-ADD COLUMN "paypalCurrency" TEXT NOT NULL DEFAULT 'EUR',
-ADD COLUMN "paypalTndPerUnit" DECIMAL(12,6),
-ADD COLUMN "deliveryCompanyName" TEXT,
-ADD COLUMN "deliveryCompanyPhone" TEXT,
-ADD COLUMN "deliveryCompanyWebsite" TEXT,
-ADD COLUMN "deliveryCompanyAccount" TEXT;
+ADD COLUMN IF NOT EXISTS "paymentProvider" TEXT,
+ADD COLUMN IF NOT EXISTS "paymentMode" TEXT NOT NULL DEFAULT 'sandbox',
+ADD COLUMN IF NOT EXISTS "paypalClientId" TEXT,
+ADD COLUMN IF NOT EXISTS "paypalClientSecretEncrypted" TEXT,
+ADD COLUMN IF NOT EXISTS "paypalCurrency" TEXT NOT NULL DEFAULT 'EUR',
+ADD COLUMN IF NOT EXISTS "paypalTndPerUnit" DECIMAL(12,6),
+ADD COLUMN IF NOT EXISTS "deliveryCompanyName" TEXT,
+ADD COLUMN IF NOT EXISTS "deliveryCompanyPhone" TEXT,
+ADD COLUMN IF NOT EXISTS "deliveryCompanyWebsite" TEXT,
+ADD COLUMN IF NOT EXISTS "deliveryCompanyAccount" TEXT;
 
 ALTER TABLE "orders"
-ADD COLUMN "paymentStatus" TEXT,
-ADD COLUMN "externalPaymentId" TEXT;
+ADD COLUMN IF NOT EXISTS "paymentStatus" TEXT,
+ADD COLUMN IF NOT EXISTS "externalPaymentId" TEXT;
 
-CREATE INDEX "orders_externalPaymentId_idx" ON "orders"("externalPaymentId");
+CREATE INDEX IF NOT EXISTS "orders_externalPaymentId_idx" ON "orders"("externalPaymentId");
 
-CREATE TABLE "online_payment_sessions" (
+CREATE TABLE IF NOT EXISTS "online_payment_sessions" (
   "id" TEXT NOT NULL,
   "cartId" TEXT NOT NULL,
   "paypalOrderId" TEXT NOT NULL,
@@ -30,5 +30,5 @@ CREATE TABLE "online_payment_sessions" (
   CONSTRAINT "online_payment_sessions_pkey" PRIMARY KEY ("id")
 );
 
-CREATE UNIQUE INDEX "online_payment_sessions_paypalOrderId_key" ON "online_payment_sessions"("paypalOrderId");
-CREATE INDEX "online_payment_sessions_expiresAt_idx" ON "online_payment_sessions"("expiresAt");
+CREATE UNIQUE INDEX IF NOT EXISTS "online_payment_sessions_paypalOrderId_key" ON "online_payment_sessions"("paypalOrderId");
+CREATE INDEX IF NOT EXISTS "online_payment_sessions_expiresAt_idx" ON "online_payment_sessions"("expiresAt");

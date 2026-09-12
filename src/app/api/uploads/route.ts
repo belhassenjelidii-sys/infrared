@@ -11,7 +11,7 @@ import { saveImageLocally } from "@/lib/uploads";
 import { processImage } from "@/lib/image-pipeline/pipeline";
 import { storePipelineOutput, storeTransparentProductImage } from "@/lib/image-pipeline/storage";
 import { analyzeTransparency, hasReusableAlpha, removeBackground } from "@/lib/image-pipeline/background-remover";
-import { MAX_UPLOAD_BYTES } from "@/lib/image-pipeline/validator";
+import { MAX_UPLOAD_BYTES, validateImage } from "@/lib/image-pipeline/validator";
 import { fetchSafeRemoteBytes } from "@/lib/security/remote-url";
 import { consumeRateLimit, requestFingerprint } from "@/lib/security/rate-limit";
 
@@ -38,6 +38,7 @@ async function storeVideo(buffer: Buffer, mime: "video/mp4" | "video/webm", fold
  */
 async function handleImage(buffer: Buffer, folder: string, preserveBackground = false, preserveOriginal = false) {
   if (folder === "products") {
+    await validateImage(buffer);
     // Editorial product views featuring a person/mannequin are the one
     // intentional exception to the transparent-cutout rule. Staff must opt
     // into it explicitly: this avoids both a destructive face cutout and a

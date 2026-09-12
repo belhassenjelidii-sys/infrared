@@ -193,7 +193,14 @@ body {
 .admin-action-button:hover { border-color: var(--color-red); color: var(--color-red); background: color-mix(in srgb, var(--color-red) 7%, var(--admin-panel)); }
 .document-label { font-size:.65rem; font-weight:800; letter-spacing:.16em; text-transform:uppercase; color:#68758a; }
 @media print {
-  @page { size: A4; margin: 10mm; }
-  body { background:#fff !important; }
-  .print-document { max-width:none !important; padding:0 !important; }
+  @page { size: A4 portrait; margin: 10mm; }
+  html, body { width:210mm; min-height:297mm; background:#fff !important; }
+  body { margin:0 !important; color:#172033 !important; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+  nav, aside, button, .print\:hidden { display:none !important; }
+  .print-document { max-width:none !important; min-height:auto !important; margin:0 !important; padding:0 !important; }
+  .print-sheet { border:0 !important; border-radius:0 !important; box-shadow:none !important; }
+  .print-sheet header { break-inside:avoid; }
+  .print-sheet section, .print-sheet table, .signature-client { break-inside:avoid; }
+  .print-sheet tr { break-inside:avoid; page-break-inside:avoid; }
+  .print-sheet th, .print-sheet td { vertical-align:top; }
 }
