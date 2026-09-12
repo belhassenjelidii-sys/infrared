@@ -2,7 +2,7 @@ import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import type { Prisma } from "@prisma/client";
 import { CART_COOKIE } from "@/lib/commerce";
-import { finalizeOrderFromCart, getOrderableCart } from "@/lib/order-finalization";
+import { finalizeOrderFromCart, getOrderableCart, orderConfirmationPath } from "@/lib/order-finalization";
 import { capturePayPalOrder, getPayPalConfig } from "@/lib/paypal";
 import { prisma } from "@/lib/prisma";
 
@@ -17,8 +17,8 @@ export async function GET(request: Request) {
   const paypalOrderId = url.searchParams.get("token") ?? "";
   try {
     if (!sessionId || !paypalOrderId) throw new Error("Retour PayPal invalide.");
-    const alreadyCreated = await prisma.order.findFirst({ where: { externalPaymentId: paypalOrderId }, select: { number: true } });
-    if (alreadyCreated) return NextResponse.redirect(new URL(`/commande/${alreadyCreated.number}`, url.origin));
+    const alreadyCreated = await prisma.order.findFirst({ where: { externalPaymentId: paypalOrderId }, select: { number: true, publicToken: true } });
+    if (alreadyCreated) return NextResponse.redirect(new URL(orderConfirmationPath(alreadyCreated.number, alreadyCreated.publicToken), url.origin));
     const session = await prisma.onlinePaymentSession.findUnique({ where: { id: sessionId } });
     if (!session || session.paypalOrderId !== paypalOrderId || session.expiresAt < new Date()) throw new Error("La session de paiement a expiré.");
     await getOrderableCart(session.cartId);
@@ -31,7 +31,7 @@ export async function GET(request: Request) {
     const result = await finalizeOrderFromCart({ cartId: session.cartId, customerSnapshot: jsonObject(session.customerSnapshot), fulfillmentSnapshot: fulfillment, paymentMethod: "PAYPAL", paymentStatus: "PAID", externalPaymentId: paypalOrderId, deliveryFee });
     await prisma.onlinePaymentSession.deleteMany({ where: { id: session.id } });
     (await cookies()).delete(CART_COOKIE);
-    return NextResponse.redirect(new URL(`/commande/${result.orderNumber}`, url.origin));
+    return NextResponse.redirect(new URL(orderConfirmationPath(result.orderNumber, result.publicToken), url.origin));
   } catch (error) {
     console.error("PayPal return failed:", error instanceof Error ? error.message : error);
     return NextResponse.redirect(new URL("/checkout?paypal=error", url.origin));

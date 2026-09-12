@@ -5,9 +5,11 @@ import { redirect } from "next/navigation";
 import type { Prisma } from "@prisma/client";
 import type { ActionResult } from "@/components/ActionForm";
 import { CART_COOKIE, getCommerceSettings } from "@/lib/commerce";
-import { cartSubtotal, finalizeOrderFromCart, getOrderableCart } from "@/lib/order-finalization";
-import { createTndPayment, getTndPaymentConfig } from "@/lib/tnd-payment";
+import { defaultCheckoutPayment, isCheckoutPaymentCompatible, type CheckoutFulfillment } from "@/lib/checkout-options";
+import { cartSubtotal, finalizeOrderFromCart, getOrderableCart, orderConfirmationPath } from "@/lib/order-finalization";
+import { createTndPayment, getTndPaymentConfig, getTndPaymentPublicStatus } from "@/lib/tnd-payment";
 import { prisma } from "@/lib/prisma";
+import { resolveTunisianAddress } from "@/lib/tunisia-addresses";
 
 function requiredText(value: FormDataEntryValue | null, label: string, max = 180) {
   const text = String(value ?? "").trim();
@@ -33,29 +35,48 @@ export async function createOrderAction(_state: ActionResult, formData: FormData
     const cartId = (await cookies()).get(CART_COOKIE)?.value;
     if (!cartId) throw new Error("Votre panier est vide.");
     const cart = await getOrderableCart(cartId);
-    const fulfillment = String(formData.get("fulfillment") ?? "");
+    const fulfillment = String(formData.get("fulfillment") ?? "") as CheckoutFulfillment;
     if (fulfillment === "DELIVERY" && !features.delivery) throw new Error("La livraison est désactivée.");
     if (fulfillment === "PICKUP" && !features.storePickup) throw new Error("Le retrait en boutique est désactivé.");
     if (!["DELIVERY", "PICKUP"].includes(fulfillment)) throw new Error("Choisissez un mode de remise.");
-    const payment = String(formData.get("paymentMethod") ?? "");
-    if (payment === "CASH_ON_DELIVERY" && (!features.cashOnDelivery || fulfillment !== "DELIVERY")) throw new Error("Le paiement à la livraison n’est pas disponible.");
-    if (payment === "CASH_IN_STORE" && (!features.storePickup || fulfillment !== "PICKUP")) throw new Error("Le paiement en boutique nécessite le retrait en boutique.");
-    if (payment === "ONLINE_TND" && !features.onlinePayment) throw new Error("Le paiement en ligne est désactivé.");
-    if (!["CASH_ON_DELIVERY", "CASH_IN_STORE", "ONLINE_TND"].includes(payment)) throw new Error("Choisissez un mode de paiement disponible.");
+    const gatewayStatus = features.onlinePayment ? await getTndPaymentPublicStatus() : null;
+    const onlineAvailable = Boolean(features.onlinePayment && gatewayStatus?.ready);
+    const submittedPayment = String(formData.get("paymentMethod") ?? "");
+    const payment = onlineAvailable
+      ? submittedPayment
+      : defaultCheckoutPayment({ fulfillment, cashOnDelivery: features.cashOnDelivery, onlineAvailable });
+    if (!payment || !isCheckoutPaymentCompatible({ fulfillment, payment, cashOnDelivery: features.cashOnDelivery, onlineAvailable })) {
+      throw new Error("Le mode de paiement choisi est incompatible avec le mode de remise.");
+    }
     const name = requiredText(formData.get("name"), "Le nom", 120);
     const email = String(formData.get("email") ?? "").trim().toLowerCase();
     if (email && !/^\S+@\S+\.\S+$/.test(email)) throw new Error("L’adresse e-mail est invalide.");
     const phone = requiredText(formData.get("phone"), "Le téléphone", 20).replace(/[\s.-]/g, "");
     if (!/^(?:\+216|00216|0)?[2-9]\d{7}$/.test(phone)) throw new Error("Le téléphone doit être un numéro tunisien valide.");
-    const address = fulfillment === "DELIVERY" ? requiredText(formData.get("address"), "L’adresse", 240) : null;
-    const city = fulfillment === "DELIVERY" ? requiredText(formData.get("city"), "La ville ou le gouvernorat", 100) : null;
+    const address = fulfillment === "DELIVERY" ? requiredText(formData.get("address"), "L’adresse exacte", 240) : null;
+    const structuredAddress = fulfillment === "DELIVERY" ? resolveTunisianAddress({
+      governorate: requiredText(formData.get("governorate"), "Le gouvernorat", 100),
+      delegation: requiredText(formData.get("delegation"), "La zone ou délégation", 120),
+      locality: requiredText(formData.get("locality"), "La localité ou le quartier", 160),
+      postalCode: String(formData.get("postalCode") ?? "").trim() || null,
+    }) : null;
     const notes = String(formData.get("notes") ?? "").trim().slice(0, 500) || null;
     const storeId = fulfillment === "PICKUP" ? requiredText(formData.get("storeId"), "La boutique", 80) : null;
     const store = storeId ? await prisma.store.findFirst({ where: { id: storeId, active: true }, select: { id: true, name: true, address: true } }) : null;
     if (fulfillment === "PICKUP" && !store) throw new Error("La boutique choisie est indisponible.");
     const customerSnapshot = { name, email: email || null, phone } as Prisma.InputJsonObject;
     const deliveryFee = fulfillment === "DELIVERY" ? features.deliveryFee : 0;
-    const fulfillmentSnapshot = (fulfillment === "DELIVERY" ? { method: "DELIVERY", address, city, notes, fee: deliveryFee } : { method: "PICKUP", store, notes }) as Prisma.InputJsonObject;
+    const fulfillmentSnapshot = (fulfillment === "DELIVERY" ? {
+      method: "DELIVERY",
+      address,
+      city: [structuredAddress?.locality, structuredAddress?.delegation, structuredAddress?.governorate].filter(Boolean).join(", "),
+      governorate: structuredAddress?.governorate,
+      delegation: structuredAddress?.delegation,
+      locality: structuredAddress?.locality,
+      postalCode: structuredAddress?.postalCode,
+      notes,
+      fee: deliveryFee,
+    } : { method: "PICKUP", store, notes }) as Prisma.InputJsonObject;
 
     if (payment === "ONLINE_TND") {
       const config = await getTndPaymentConfig();
@@ -72,7 +93,7 @@ export async function createOrderAction(_state: ActionResult, formData: FormData
     } else {
       const result = await finalizeOrderFromCart({ cartId, customerSnapshot, fulfillmentSnapshot, paymentMethod: payment, paymentStatus: "PENDING", deliveryFee });
       (await cookies()).delete(CART_COOKIE);
-      destination = `/commande/${result.orderNumber}`;
+      destination = orderConfirmationPath(result.orderNumber, result.publicToken);
     }
   } catch (error) {
     return { error: error instanceof Error ? error.message : "Impossible de créer la commande." };

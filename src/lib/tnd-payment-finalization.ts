@@ -14,8 +14,8 @@ export async function finalizeTndPaymentSession(sessionId: string, requestedPaym
   if (!session || session.expiresAt < new Date()) throw new Error("La session de paiement a expiré.");
   const externalPaymentId = session.externalPaymentId || session.paypalOrderId;
   if (requestedPaymentId && requestedPaymentId !== externalPaymentId) throw new Error("Référence de paiement invalide.");
-  const existing = await prisma.order.findFirst({ where: { externalPaymentId }, select: { number: true } });
-  if (existing) return existing.number;
+  const existing = await prisma.order.findFirst({ where: { externalPaymentId }, select: { number: true, publicToken: true } });
+  if (existing) return { orderNumber: existing.number, publicToken: existing.publicToken };
   if (session.currency !== "TND") throw new Error("La transaction n’est pas libellée en dinars tunisiens.");
   const config = await getTndPaymentConfig();
   if (config.provider !== session.provider) throw new Error("Le fournisseur de paiement ne correspond plus à la session.");
@@ -37,5 +37,5 @@ export async function finalizeTndPaymentSession(sessionId: string, requestedPaym
     deliveryFee,
   });
   await prisma.onlinePaymentSession.deleteMany({ where: { id: session.id } });
-  return result.orderNumber;
+  return { orderNumber: result.orderNumber, publicToken: result.publicToken };
 }
