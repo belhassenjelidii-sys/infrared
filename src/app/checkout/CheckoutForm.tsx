@@ -1,132 +1,24 @@
 "use client";
-
 import { useMemo, useState } from "react";
+import { Check, ChevronDown, CreditCard, MapPin, ShieldCheck, Store, Truck } from "lucide-react";
 import ActionForm, { SubmitButton } from "@/components/ActionForm";
-import { formatDT } from "@/lib/currency";
+import { getDelegations, getGovernorates, getLocalities } from "@/data/tunisia-addresses";
 import { availableCheckoutPayments, defaultCheckoutPayment, type CheckoutFulfillment, type CheckoutPayment } from "@/lib/checkout-options";
-import { displayTunisianPlace, findDelegation, findGovernorate, localityChoice, TUNISIAN_GOVERNORATES } from "@/lib/tunisia-addresses";
+import { formatDT } from "@/lib/currency";
 import { createOrderAction } from "./actions";
-
-type CheckoutFeatures = {
-  delivery: boolean;
-  storePickup: boolean;
-  cashOnDelivery: boolean;
-  onlinePayment: boolean;
-  deliveryFee: number;
-};
-
-type CheckoutItem = {
-  id: string;
-  quantity: number;
-  unitPrice: number;
-  brand: string;
-  model: string;
-  details: string;
-};
-
-export default function CheckoutForm({
-  features,
-  stores,
-  gateway,
-  items,
-  subtotal,
-}: {
-  features: CheckoutFeatures;
-  stores: { id: string; name: string; address: string }[];
-  gateway: { ready: boolean; label: string | null; mode: "sandbox" | "live" };
-  items: CheckoutItem[];
-  subtotal: number;
-}) {
-  const onlineAvailable = features.onlinePayment && gateway.ready;
-  const deliveryAvailable = features.delivery && (features.cashOnDelivery || onlineAvailable);
-  const pickupAvailable = features.storePickup;
-  const initialFulfillment: CheckoutFulfillment = deliveryAvailable ? "DELIVERY" : "PICKUP";
-  const [fulfillment, setFulfillment] = useState<CheckoutFulfillment>(initialFulfillment);
-  const [payment, setPayment] = useState<CheckoutPayment | null>(() => defaultCheckoutPayment({ fulfillment: initialFulfillment, cashOnDelivery: features.cashOnDelivery, onlineAvailable }));
-  const [governorateValue, setGovernorateValue] = useState("");
-  const [delegationValue, setDelegationValue] = useState("");
-  const [localityValue, setLocalityValue] = useState("");
-
-  const governorate = useMemo(() => findGovernorate(governorateValue), [governorateValue]);
-  const delegation = useMemo(() => findDelegation(governorate, delegationValue), [governorate, delegationValue]);
-  const locality = useMemo(() => delegation?.localities.find((entry) => localityChoice(entry) === localityValue) ?? null, [delegation, localityValue]);
-  const paymentOptions = availableCheckoutPayments({ fulfillment, cashOnDelivery: features.cashOnDelivery, onlineAvailable });
-  const total = subtotal + (fulfillment === "DELIVERY" ? features.deliveryFee : 0);
-
-  function selectFulfillment(next: CheckoutFulfillment) {
-    setFulfillment(next);
-    setPayment(defaultCheckoutPayment({ fulfillment: next, cashOnDelivery: features.cashOnDelivery, onlineAvailable }));
-  }
-
-  return <div className="mt-8 grid items-start gap-8 lg:grid-cols-[minmax(0,1fr)_360px]">
-    <ActionForm action={createOrderAction} className="grid gap-6">
-      <fieldset className="grid gap-4 border p-5">
-        <legend className="px-2 font-medium">Coordonnées du client</legend>
-        <input name="name" required maxLength={120} autoComplete="name" placeholder="Nom et prénom *" className="min-h-12 border px-3"/>
-        <input name="phone" required inputMode="tel" autoComplete="tel" title="Saisissez un numéro tunisien valide, par exemple 20 123 456." maxLength={20} placeholder="Téléphone tunisien * · 20 123 456" className="min-h-12 border px-3"/>
-        <input name="email" type="email" maxLength={180} autoComplete="email" placeholder="E-mail (facultatif)" className="min-h-12 border px-3"/>
-      </fieldset>
-
-      <fieldset className="grid gap-3 border p-5">
-        <legend className="px-2 font-medium">Mode de remise</legend>
-        {features.delivery && <label className={`flex items-center gap-3 border p-4 ${deliveryAvailable ? "" : "cursor-not-allowed opacity-50"}`}>
-          <input type="radio" name="fulfillment" value="DELIVERY" required checked={fulfillment === "DELIVERY"} disabled={!deliveryAvailable} onChange={() => selectFulfillment("DELIVERY")}/>
-          <span>Livraison à domicile · {formatDT(features.deliveryFee)}</span>
-        </label>}
-        {pickupAvailable && <label className="flex items-center gap-3 border p-4">
-          <input type="radio" name="fulfillment" value="PICKUP" required checked={fulfillment === "PICKUP"} onChange={() => selectFulfillment("PICKUP")}/>
-          <span>Retrait gratuit en boutique</span>
-        </label>}
-        {fulfillment === "PICKUP" && <select name="storeId" defaultValue="" required className="min-h-12 border px-3">
-          <option value="">Choisir la boutique de retrait</option>
-          {stores.map((store) => <option key={store.id} value={store.id}>{store.name} — {store.address}</option>)}
-        </select>}
-      </fieldset>
-
-      {fulfillment === "DELIVERY" && <fieldset className="grid gap-4 border p-5">
-        <legend className="px-2 font-medium">Adresse de livraison</legend>
-        <label className="grid gap-2 text-sm font-medium">Gouvernorat *
-          <input list="tunisia-governorates" value={governorateValue} required autoComplete="off" placeholder="Rechercher un gouvernorat" className="min-h-12 border px-3 font-normal" onChange={(event) => { setGovernorateValue(event.target.value); setDelegationValue(""); setLocalityValue(""); }} onBlur={() => { if (!governorate) setGovernorateValue(""); }}/>
-          <datalist id="tunisia-governorates">{TUNISIAN_GOVERNORATES.map((entry) => <option key={entry.name} value={displayTunisianPlace(entry.name)}/>)}</datalist>
-        </label>
-        <input type="hidden" name="governorate" value={governorate?.name ?? ""}/>
-        <label className="grid gap-2 text-sm font-medium">Zone / délégation *
-          <input list="tunisia-delegations" value={delegationValue} required disabled={!governorate} autoComplete="off" placeholder="Rechercher une zone ou délégation" className="min-h-12 border px-3 font-normal disabled:bg-black/5" onChange={(event) => { setDelegationValue(event.target.value); setLocalityValue(""); }} onBlur={() => { if (!delegation) setDelegationValue(""); }}/>
-          <datalist id="tunisia-delegations">{governorate?.delegations.map((entry) => <option key={entry.name} value={displayTunisianPlace(entry.name)}/>)}</datalist>
-        </label>
-        <input type="hidden" name="delegation" value={delegation?.name ?? ""}/>
-        <label className="grid gap-2 text-sm font-medium">Localité / quartier *
-          <input list="tunisia-localities" value={localityValue} required disabled={!delegation} autoComplete="off" placeholder="Rechercher une localité ou un quartier" className="min-h-12 border px-3 font-normal disabled:bg-black/5" onChange={(event) => setLocalityValue(event.target.value)} onBlur={() => { if (!locality) setLocalityValue(""); }}/>
-          <datalist id="tunisia-localities">{delegation?.localities.map((entry, index) => <option key={`${entry.name}-${entry.postalCode}-${index}`} value={localityChoice(entry)}/>)}</datalist>
-        </label>
-        <input type="hidden" name="locality" value={locality?.name ?? ""}/>
-        <label className="grid gap-2 text-sm font-medium">Code postal
-          <input name="postalCode" value={locality?.postalCode ?? ""} readOnly placeholder="Renseigné automatiquement" className="min-h-12 border bg-black/[0.025] px-3 font-normal"/>
-        </label>
-        <label className="grid gap-2 text-sm font-medium">Adresse exacte *
-          <textarea name="address" required maxLength={240} autoComplete="street-address" placeholder="Rue, numéro, résidence, étage…" rows={3} className="border p-3 font-normal"/>
-        </label>
-      </fieldset>}
-
-      {onlineAvailable ? <fieldset className="grid gap-3 border p-5">
-        <legend className="px-2 font-medium">Mode de paiement</legend>
-        {paymentOptions.includes("CASH_ON_DELIVERY") && <label className="flex items-center gap-3 border p-4"><input type="radio" name="paymentMethod" value="CASH_ON_DELIVERY" required checked={payment === "CASH_ON_DELIVERY"} onChange={() => setPayment("CASH_ON_DELIVERY")}/><span>Paiement à la livraison</span></label>}
-        {paymentOptions.includes("CASH_IN_STORE") && <label className="flex items-center gap-3 border p-4"><input type="radio" name="paymentMethod" value="CASH_IN_STORE" required checked={payment === "CASH_IN_STORE"} onChange={() => setPayment("CASH_IN_STORE")}/><span>Paiement en boutique au retrait</span></label>}
-        {paymentOptions.includes("ONLINE_TND") && <label className="flex items-center justify-between gap-3 border p-4"><span className="flex items-center gap-3"><input type="radio" name="paymentMethod" value="ONLINE_TND" required checked={payment === "ONLINE_TND"} onChange={() => setPayment("ONLINE_TND")}/><span>{gateway.label} {gateway.mode === "sandbox" ? "· Test Sandbox" : "· Paiement sécurisé"}</span></span><small className="text-stone">Débit en TND</small></label>}
-      </fieldset> : <input type="hidden" name="paymentMethod" value={payment ?? ""}/>}
-
-      {features.onlinePayment && !gateway.ready && <p className="rounded-lg bg-amber-50 p-3 text-sm text-amber-900">Le paiement en ligne est activé mais sa passerelle TND est incomplète. Seul le paiement lié au mode de remise est disponible.</p>}
-      <textarea name="notes" maxLength={500} placeholder="Notes (facultatif)" rows={3} className="border p-3"/>
-      <div><SubmitButton disabled={!payment}>Confirmer la commande</SubmitButton></div>
-    </ActionForm>
-
-    <aside className="border bg-[#fafafa] p-6">
-      <h2 className="font-medium">Votre commande</h2>
-      <div className="mt-4 divide-y">{items.map((item) => <div key={item.id} className="flex justify-between gap-4 py-3 text-sm"><span>{item.quantity} × {item.brand} {item.model}<small className="mt-1 block text-black/55">{item.details}</small></span><strong className="whitespace-nowrap">{formatDT(item.unitPrice * item.quantity)}</strong></div>)}</div>
-      <div className="mt-4 flex justify-between border-t pt-4"><span>Sous-total</span><strong>{formatDT(subtotal)}</strong></div>
-      {fulfillment === "DELIVERY" && <div className="mt-3 flex justify-between text-sm"><span>Livraison</span><strong>{formatDT(features.deliveryFee)}</strong></div>}
-      <div className="mt-4 flex justify-between border-t pt-4 text-lg"><span>Total</span><strong>{formatDT(total)}</strong></div>
-      {onlineAvailable && <p className="mt-4 border-t pt-4 text-xs leading-5 text-stone">Le montant final est transmis et vérifié en dinars tunisiens, sans conversion de devise.</p>}
-    </aside>
-  </div>;
-}
+type Features={delivery:boolean;storePickup:boolean;cashOnDelivery:boolean;onlinePayment:boolean;deliveryFee:number};type Item={id:string;quantity:number;unitPrice:number;brand:string;model:string;details:string};type State="neutral"|"invalid"|"valid";type Option={value:string;label:string;detail?:string};
+const style:Record<State,string>={neutral:"border-black/10 bg-white focus:border-red focus:ring-red/10",invalid:"border-red bg-red-soft/40",valid:"border-emerald-500/60 bg-emerald-50/30"};const norm=(v:string)=>v.normalize("NFD").replace(/\p{Diacritic}/gu,"").replace(/\s+/g,"").toLocaleLowerCase("fr-TN");
+function Message({state,error}:{state:State;error:string}){return state==="invalid"?<p className="mt-1 text-xs text-red">{error}</p>:null}
+function Select({label,value,options,state,error,shake,onSelect,onBlur}:{label:string;value:string;options:Option[];state:State;error:string;shake:boolean;onSelect:(v:string)=>void;onBlur:()=>void}){const[q,setQ]=useState(value),[open,setOpen]=useState(false),[index,setIndex]=useState(0);const matches=useMemo(()=>{const k=norm(q);return options.filter(o=>!k||norm(`${o.label} ${o.detail??""}`).includes(k)).slice(0,80)},[options,q]);const choose=(o:Option)=>{setQ(o.label);onSelect(o.value);setOpen(false)};return <div className={shake?"shake":""}><label className="relative grid gap-1.5 text-sm font-medium"><span>{label}</span><span className="relative"><input value={q} required autoComplete="off" className={`min-h-10 w-full rounded-lg border px-3 pr-10 text-sm font-normal outline-none focus:ring-4 ${style[state]}`} onFocus={e=>{setOpen(true);setIndex(0);e.currentTarget.select()}} onClick={()=>{setOpen(true);setIndex(0)}} onChange={e=>{setQ(e.target.value);setOpen(true);setIndex(0)}} onKeyDown={e=>{if(e.key==="Escape")setOpen(false);if(e.key==="ArrowDown"){e.preventDefault();setOpen(true);setIndex(i=>Math.min(i+1,Math.max(0,matches.length-1)))}if(e.key==="ArrowUp"){e.preventDefault();setOpen(true);setIndex(i=>Math.max(0,i-1))}if(e.key==="Enter"&&open&&matches[index]){e.preventDefault();choose(matches[index])}}} onBlur={()=>{window.setTimeout(()=>setOpen(false),120);onBlur()}}/><ChevronDown className={`pointer-events-none absolute right-3 top-1/2 size-4 -translate-y-1/2 ${open?"rotate-180":""}`}/>{state==="valid"&&<Check className="absolute right-8 top-1/2 size-4 -translate-y-1/2 text-emerald-600"/>}</span>{open&&<span className="absolute left-0 right-0 top-[calc(100%+0.25rem)] z-20 max-h-52 overflow-y-auto rounded-lg border border-black/10 bg-white p-1 shadow-lg">{matches.length?matches.map((o,i)=><button key={o.value} type="button" className={`flex w-full justify-between rounded-md px-3 py-2 text-left text-sm font-normal ${i===index?"bg-red-soft/60":"hover:bg-red-soft"}`} onMouseDown={e=>{e.preventDefault();choose(o)}}><span>{o.label}</span>{o.detail&&<small className="text-black/45">{o.detail}</small>}</button>):<span className="block px-3 py-2 text-sm font-normal text-stone">Aucune proposition.</span>}</span>}</label><Message state={state} error={error}/></div>}
+export default function CheckoutForm({features,stores,gateway,items,subtotal}:{features:Features;stores:{id:string;name:string;address:string}[];gateway:{ready:boolean;label:string|null;mode:"sandbox"|"live"};items:Item[];subtotal:number}){const online=features.onlinePayment&&gateway.ready,deliveryAvailable=features.delivery&&(features.cashOnDelivery||online),initial:CheckoutFulfillment=deliveryAvailable?"DELIVERY":"PICKUP";const[step,setStep]=useState(1),[fulfillment,setFulfillment]=useState<CheckoutFulfillment>(initial),[payment,setPayment]=useState<CheckoutPayment|null>(()=>defaultCheckoutPayment({fulfillment:initial,cashOnDelivery:features.cashOnDelivery,onlineAvailable:online})),[gov,setGov]=useState(""),[delegation,setDelegation]=useState(""),[localityKey,setLocalityKey]=useState(""),[values,setValues]=useState({name:"",phone:"",email:"",address:"",storeId:""}),[touched,setTouched]=useState<Record<string,boolean>>({}),[submitted,setSubmitted]=useState(false),[shaking,setShaking]=useState<Record<string,boolean>>({});
+const govs=useMemo(()=>getGovernorates().map(x=>({value:x,label:x})),[]),dels=useMemo(()=>getDelegations(gov).map(x=>({value:x.name,label:x.name})),[gov]),locals=useMemo(()=>getLocalities(gov,delegation).map((x,i)=>({value:`${x.name}::${x.postalCode}::${i}`,label:x.name,detail:x.postalCode})),[gov,delegation]),locality=useMemo(()=>{const[n,p]=localityKey.split("::");return getLocalities(gov,delegation).find(x=>x.name===n&&x.postalCode===p)??null},[gov,delegation,localityKey]);
+const phone=values.phone.replace(/[\s.-]/g,"").replace(/^(?:\+216|00216)/,""),errors:Record<string,string>={name:values.name.trim()?"":"Le nom est obligatoire.",phone:!values.phone.trim()?"Le téléphone est obligatoire.":!/^\d{8}$/.test(phone)||/^(\d)\1{7}$/.test(phone)?"Saisissez 8 chiffres valides.":"",email:values.email&&!/^\S+@\S+\.\S+$/.test(values.email)?"Adresse e-mail invalide.":"",governorate:gov?"":"Choisissez un gouvernorat.",delegation:delegation?"":"Choisissez une délégation.",locality:locality?"":"Choisissez une localité.",address:values.address.trim()?"":"L’adresse exacte est obligatoire.",storeId:values.storeId?"":"Choisissez une boutique."};const required=fulfillment==="DELIVERY"?["name","phone","email","governorate","delegation","locality","address"]:["name","phone","email","storeId"],options=availableCheckoutPayments({fulfillment,cashOnDelivery:features.cashOnDelivery,onlineAvailable:online}),total=subtotal+(fulfillment==="DELIVERY"?features.deliveryFee:0);const state=(f:string):State=>!(touched[f]||submitted)?"neutral":errors[f]?"invalid":"valid";const touch=(f:string)=>{setTouched(x=>({...x,[f]:true}));if(errors[f]){setShaking(x=>({...x,[f]:false}));requestAnimationFrame(()=>setShaking(x=>({...x,[f]:true})))}},update=(f:keyof typeof values,v:string)=>setValues(x=>({...x,[f]:v})),next=(fields:string[])=>{const bad=fields.filter(f=>errors[f]);if(bad.length){bad.forEach(touch);return}setStep(x=>x+1)},choose=(next:CheckoutFulfillment)=>{setFulfillment(next);setPayment(defaultCheckoutPayment({fulfillment:next,cashOnDelivery:features.cashOnDelivery,onlineAvailable:online}))},submit=(e:React.FormEvent<HTMLFormElement>)=>{setSubmitted(true);const bad=required.filter(f=>errors[f]);if(bad.length||!payment){e.preventDefault();bad.forEach(touch)}};
+const steps=["Coordonnées","Adresse","Remise & paiement"];return <ActionForm action={createOrderAction} noValidate onSubmit={submit} className={`mx-auto mt-6 grid items-start gap-5 ${step===3?"max-w-[1180px] lg:grid-cols-[minmax(0,760px)_360px]":"max-w-[760px]"}`}><div className="grid gap-4"><nav className="grid grid-cols-3 gap-1 rounded-xl border border-black/[.06] bg-white p-1.5">{steps.map((s,i)=><div key={s} className={`flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-[11px] ${step===i+1?"bg-red text-white":step>i+1?"text-emerald-700":"text-black/40"}`}><span>{step>i+1?<Check className="size-3"/>:i+1}</span>{s}</div>)}</nav>
+<section hidden={step!==1} className="card"><p className="eyebrow">Étape 1</p><h2>Vos coordonnées</h2><p className="hint">Pour confirmer votre commande.</p><div className="mt-4 grid gap-3 sm:grid-cols-2"><Field f="name" label="Nom et prénom *" value={values.name} placeholder="Votre nom complet" st={state("name")} err={errors.name} shake={!!shaking.name} update={update} touch={touch}/><Field f="phone" label="Téléphone *" value={values.phone} placeholder="20 123 456" st={state("phone")} err={errors.phone} shake={!!shaking.phone} update={update} touch={touch} inputMode="tel"/></div><div className="mt-3"><Field f="email" label="E-mail (facultatif)" value={values.email} placeholder="vous@exemple.tn" st={state("email")} err={errors.email} shake={!!shaking.email} update={update} touch={touch} type="email"/></div><button type="button" onClick={()=>next(["name","phone","email"])} className="next">Continuer vers l’adresse</button></section>
+<section hidden={step!==2} className="card"><p className="eyebrow">Étape 2</p><h2>Adresse de livraison</h2><p className="hint">Le retrait gratuit reste disponible à l’étape suivante.</p><div className="mt-4 grid gap-3"><Select key={`g-${gov}`} label="Gouvernorat *" value={gov} options={govs} state={state("governorate")} error={errors.governorate} shake={!!shaking.governorate} onSelect={v=>{setGov(v);setDelegation("");setLocalityKey("")}} onBlur={()=>touch("governorate")}/><input type="hidden" name="governorate" value={gov}/>{gov&&<Select key={`d-${gov}-${delegation}`} label="Délégation *" value={delegation} options={dels} state={state("delegation")} error={errors.delegation} shake={!!shaking.delegation} onSelect={v=>{setDelegation(v);setLocalityKey("")}} onBlur={()=>touch("delegation")}/>}<input type="hidden" name="delegation" value={delegation}/>{delegation&&<Select key={`l-${localityKey}`} label="Localité / quartier *" value={locality?.name??""} options={locals} state={state("locality")} error={errors.locality} shake={!!shaking.locality} onSelect={setLocalityKey} onBlur={()=>touch("locality")}/>}<input type="hidden" name="locality" value={locality?.name??""}/>{locality&&<><div className="rounded-lg bg-emerald-50 px-3 py-2 text-sm">Code postal <strong>{locality.postalCode}</strong><input type="hidden" name="postalCode" value={locality.postalCode}/></div><Area value={values.address} st={state("address")} err={errors.address} shake={!!shaking.address} update={update} touch={touch}/></>}</div><label className="mt-4 block text-sm font-medium">Notes commande (facultatif)<textarea name="notes" rows={2} className="mt-1.5 w-full rounded-lg border border-black/10 p-3 font-normal"/></label><div className="mt-4 grid gap-2 sm:grid-cols-2"><button type="button" onClick={()=>setStep(1)} className="back">Retour</button><button type="button" onClick={()=>next(["governorate","delegation","locality","address"])} className="next">Continuer</button></div></section>
+<section hidden={step!==3} className="card"><p className="eyebrow">Étape 3</p><h2>Remise et paiement</h2><div className="mt-3 grid gap-3 sm:grid-cols-2">{features.delivery&&<Choice active={fulfillment==="DELIVERY"} disabled={!deliveryAvailable} icon={<Truck className="size-4"/>} title="Livraison à domicile" detail="À votre adresse" price={formatDT(features.deliveryFee)} click={()=>deliveryAvailable&&choose("DELIVERY")}/>} {features.storePickup&&<Choice active={fulfillment==="PICKUP"} icon={<Store className="size-4"/>} title="Retrait en boutique" detail="Préparation gratuite" price="Gratuit" click={()=>choose("PICKUP")}/>}</div><input type="hidden" name="fulfillment" value={fulfillment}/>{fulfillment==="PICKUP"&&<label className="mt-3 block text-sm font-medium">Boutique de retrait<select name="storeId" value={values.storeId} onChange={e=>update("storeId",e.target.value)} className={`mt-1.5 min-h-12 w-full rounded-xl border bg-white px-3 text-[15px] font-normal shadow-sm transition hover:border-red focus:border-red focus:outline-none focus:ring-4 focus:ring-red/10 ${style[state("storeId")]}`}><option value="">Choisir votre boutique</option>{stores.map(s=><option key={s.id} value={s.id}>{s.name} — {s.address}</option>)}</select><Message state={state("storeId")} error={errors.storeId}/></label>}{online&&<div className="mt-4 border-t pt-4"><h3 className="text-sm font-semibold">Mode de paiement</h3><div className="mt-2 grid gap-2">{options.includes("CASH_ON_DELIVERY")&&<Pay active={payment==="CASH_ON_DELIVERY"} icon={<Truck className="size-4"/>} title="Paiement à la livraison" click={()=>setPayment("CASH_ON_DELIVERY")}/>} {options.includes("CASH_IN_STORE")&&<Pay active={payment==="CASH_IN_STORE"} icon={<Store className="size-4"/>} title="Paiement au retrait" click={()=>setPayment("CASH_IN_STORE")}/>} {options.includes("ONLINE_TND")&&<Pay active={payment==="ONLINE_TND"} icon={<CreditCard className="size-4"/>} title={gateway.label??"Paiement en ligne"} click={()=>setPayment("ONLINE_TND")}/>}</div></div>}<input type="hidden" name="paymentMethod" value={payment??""}/><button type="button" onClick={()=>setStep(2)} className="back mt-4 w-full">Retour à l’adresse</button></section></div>
+{step===3&&<aside className="rounded-xl border border-black/[.06] bg-[#ece9e5] p-4 lg:sticky lg:top-24"><div className="flex justify-between"><div><p className="eyebrow">Récapitulatif</p><h2>Votre commande</h2></div><MapPin className="size-4 text-red"/></div><div className="mt-3 divide-y">{items.map(x=><div key={x.id} className="flex justify-between gap-3 py-3 text-sm"><span><strong>{x.quantity} × {x.brand} {x.model}</strong><small className="block text-black/50">{x.details}</small></span><strong>{formatDT(x.unitPrice*x.quantity)}</strong></div>)}</div><div className="mt-3 space-y-2 border-t pt-3 text-sm"><div className="flex justify-between"><span>Sous-total</span><span>{formatDT(subtotal)}</span></div>{fulfillment==="DELIVERY"&&<div className="flex justify-between"><span>Livraison</span><span>{formatDT(features.deliveryFee)}</span></div>}<div className="flex justify-between rounded-lg bg-[#171411] px-3 py-3 text-white"><span>Total</span><strong>{formatDT(total)}</strong></div></div><div className="mt-3 [&_button]:min-h-11 [&_button]:w-full [&_button]:bg-red [&_button]:text-white"><SubmitButton disabled={!payment}>Confirmer la commande</SubmitButton></div><p className="mt-3 flex gap-1 text-xs text-black/50"><ShieldCheck className="size-3.5"/>Paiement en dinars tunisiens.</p></aside>}<style jsx>{`.card{border:1px solid rgb(0 0 0 / .06);border-radius:.75rem;background:white;padding:1.25rem;box-shadow:0 8px 24px rgb(20 20 20 / .045)}.eyebrow{font-size:11px;font-weight:600;letter-spacing:.14em;text-transform:uppercase;color:#e40e2f}.card h2{margin-top:2px;font-size:1.125rem;font-weight:600}.hint{margin-top:2px;font-size:12px;color:#78716c}.next,.back{min-height:2.75rem;border-radius:.65rem;font-size:15px;font-weight:600;transition:transform 180ms ease,background 180ms ease}.next:hover,.back:hover{transform:translateY(-1px)}.next{margin-top:1rem;width:100%;background:#e40e2f;color:white}.back{border:1px solid rgb(0 0 0 / .1)}@keyframes shake{25%{transform:translateX(-4px)}75%{transform:translateX(4px)}}.shake{animation:shake 240ms ease-in-out}`}</style></ActionForm>}
+function Field({f,label,value,placeholder,st,err,shake,update,touch,type="text",inputMode}:{f:"name"|"phone"|"email";label:string;value:string;placeholder:string;st:State;err:string;shake:boolean;update:(f:"name"|"phone"|"email",v:string)=>void;touch:(f:string)=>void;type?:string;inputMode?:"tel"}){return <label className={shake?"shake":""}><span className="mb-1.5 block text-[15px] font-medium">{label}</span><input name={f} required={f!=="email"} value={value} type={type} inputMode={inputMode} placeholder={placeholder} onChange={e=>update(f,e.target.value)} onBlur={()=>touch(f)} className={`min-h-11 w-full rounded-lg border px-3 text-[15px] outline-none transition focus:ring-4 ${style[st]}`}/><Message state={st} error={err}/></label>}
+function Area({value,st,err,shake,update,touch}:{value:string;st:State;err:string;shake:boolean;update:(f:"address",v:string)=>void;touch:(f:string)=>void}){return <label className={shake?"shake":""}><span className="mb-1.5 block text-sm font-medium">Adresse exacte *</span><textarea name="address" required rows={2} value={value} onChange={e=>update("address",e.target.value)} onBlur={()=>touch("address")} className={`w-full rounded-lg border p-3 text-sm outline-none focus:ring-4 ${style[st]}`}/><Message state={st} error={err}/></label>}
+function Choice({active,disabled,icon,title,detail,price,click}:{active:boolean;disabled?:boolean;icon:React.ReactNode;title:string;detail:string;price:string;click:()=>void}){return <button type="button" disabled={disabled} onClick={click} className={`relative flex min-h-[88px] items-center gap-3 rounded-xl border p-3.5 text-left transition duration-200 hover:-translate-y-0.5 hover:shadow-md disabled:opacity-45 ${active?"border-red bg-red-soft/55 shadow-sm":"border-black/10 bg-white"}`}><span className={`grid size-9 place-items-center rounded-full ${active?"bg-red text-white":"bg-black/[.04] text-red"}`}>{icon}</span><span className="flex-1"><strong className="block text-[15px]">{title}</strong><small className="mt-0.5 block text-[13px] text-stone">{detail}</small></span><strong className="text-sm">{price}</strong>{active&&<Check className="absolute right-2.5 top-2.5 size-3.5 text-red"/>}</button>}
+function Pay({active,icon,title,click}:{active:boolean;icon:React.ReactNode;title:string;click:()=>void}){return <button type="button" onClick={click} className={`flex items-center gap-3 rounded-xl border p-3.5 text-left transition duration-200 hover:-translate-y-0.5 hover:shadow-sm ${active?"border-red bg-red-soft/55":"border-black/10"}`}><span className="grid size-8 place-items-center rounded-full bg-black/[.04] text-red">{icon}</span><span className="flex-1 text-[15px] font-medium">{title}</span>{active&&<Check className="size-4 text-red"/>}</button>}

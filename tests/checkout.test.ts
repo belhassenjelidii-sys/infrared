@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { availableCheckoutPayments, defaultCheckoutPayment, isCheckoutPaymentCompatible } from "../src/lib/checkout-options";
-import { resolveTunisianAddress } from "../src/lib/tunisia-addresses";
+import { getDelegations, getGovernorates, getLocalities } from "../src/data/tunisia-addresses";
 
 test("livraison et retrait choisissent le paiement hors ligne compatible", () => {
   assert.equal(defaultCheckoutPayment({ fulfillment: "DELIVERY", cashOnDelivery: true, onlineAvailable: false }), "CASH_ON_DELIVERY");
@@ -16,12 +16,12 @@ test("les paiements en ligne réellement disponibles complètent chaque mode de 
   assert.equal(defaultCheckoutPayment({ fulfillment: "PICKUP", cashOnDelivery: true, onlineAvailable: true }), "CASH_IN_STORE");
 });
 
-test("l’adresse tunisienne est résolue depuis une proposition officielle", () => {
-  assert.deepEqual(resolveTunisianAddress({ governorate: "Tunis", delegation: "El Kram", locality: "Le Kram Est", postalCode: "2015" }), {
-    governorate: "TUNIS",
-    delegation: "EL KRAM",
-    locality: "LE KRAM EST",
-    postalCode: "2015",
-  });
-  assert.throws(() => resolveTunisianAddress({ governorate: "Tunis", delegation: "El Kram", locality: "Quartier inventé" }));
+test("le référentiel local expose les adresses tunisiennes par niveaux", () => {
+  const tunis = getGovernorates().find((name) => name.toLocaleLowerCase("fr-TN") === "tunis");
+  assert.ok(tunis);
+  const kram = getDelegations(tunis).find((entry) => entry.name.toLocaleLowerCase("fr-TN") === "el kram");
+  assert.ok(kram);
+  const kramEst = getLocalities(tunis, kram.name).find((entry) => entry.name.toLocaleLowerCase("fr-TN") === "le kram est");
+  assert.equal(kramEst?.postalCode, "2015");
+  assert.deepEqual(getLocalities(tunis, "Délégation inventée"), []);
 });

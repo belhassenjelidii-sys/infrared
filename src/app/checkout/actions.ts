@@ -4,18 +4,37 @@ import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 import type { Prisma } from "@prisma/client";
 import type { ActionResult } from "@/components/ActionForm";
+import { getDelegations, getGovernorates, getLocalities } from "@/data/tunisia-addresses";
 import { CART_COOKIE, getCommerceSettings } from "@/lib/commerce";
 import { defaultCheckoutPayment, isCheckoutPaymentCompatible, type CheckoutFulfillment } from "@/lib/checkout-options";
 import { cartSubtotal, finalizeOrderFromCart, getOrderableCart, orderConfirmationPath } from "@/lib/order-finalization";
 import { createTndPayment, getTndPaymentConfig, getTndPaymentPublicStatus } from "@/lib/tnd-payment";
 import { prisma } from "@/lib/prisma";
-import { resolveTunisianAddress } from "@/lib/tunisia-addresses";
 
 function requiredText(value: FormDataEntryValue | null, label: string, max = 180) {
   const text = String(value ?? "").trim();
   if (!text) throw new Error(`${label} est obligatoire.`);
   if (text.length > max) throw new Error(`${label} est trop long.`);
   return text;
+}
+
+function normalizeTunisianPhone(value: FormDataEntryValue | null) {
+  const raw = requiredText(value, "Le téléphone", 20);
+  const compact = raw.replace(/[\s.-]/g, "");
+  const normalized = compact.replace(/^(?:\+216|00216)/, "");
+  if (!/^\d{8}$/.test(normalized) || /^(\d)\1{7}$/.test(normalized)) {
+    throw new Error("Le téléphone doit contenir 8 chiffres valides.");
+  }
+  return normalized;
+}
+
+function resolveTunisianAddress(input: { governorate: string; delegation: string; locality: string; postalCode?: string | null }) {
+  if (!getGovernorates().includes(input.governorate)) throw new Error("Choisissez un gouvernorat dans les propositions.");
+  const delegation = getDelegations(input.governorate).find((entry) => entry.name === input.delegation);
+  if (!delegation) throw new Error("Choisissez une délégation dans les propositions.");
+  const locality = getLocalities(input.governorate, delegation.name).find((entry) => entry.name === input.locality && (!input.postalCode || entry.postalCode === input.postalCode));
+  if (!locality) throw new Error("Choisissez une localité dans les propositions.");
+  return { governorate: input.governorate, delegation: delegation.name, locality: locality.name, postalCode: locality.postalCode };
 }
 
 async function requestOrigin() {
@@ -51,8 +70,7 @@ export async function createOrderAction(_state: ActionResult, formData: FormData
     const name = requiredText(formData.get("name"), "Le nom", 120);
     const email = String(formData.get("email") ?? "").trim().toLowerCase();
     if (email && !/^\S+@\S+\.\S+$/.test(email)) throw new Error("L’adresse e-mail est invalide.");
-    const phone = requiredText(formData.get("phone"), "Le téléphone", 20).replace(/[\s.-]/g, "");
-    if (!/^(?:\+216|00216|0)?[2-9]\d{7}$/.test(phone)) throw new Error("Le téléphone doit être un numéro tunisien valide.");
+    const phone = normalizeTunisianPhone(formData.get("phone"));
     const address = fulfillment === "DELIVERY" ? requiredText(formData.get("address"), "L’adresse exacte", 240) : null;
     const structuredAddress = fulfillment === "DELIVERY" ? resolveTunisianAddress({
       governorate: requiredText(formData.get("governorate"), "Le gouvernorat", 100),
