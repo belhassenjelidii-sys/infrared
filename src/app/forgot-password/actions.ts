@@ -2,7 +2,7 @@
 
 import { requestPasswordReset } from "@/lib/password-reset";
 import { headers } from "next/headers";
-import { consumeRateLimit } from "@/lib/security/rate-limit";
+import { clientIp, consumeRateLimit } from "@/lib/security/rate-limit";
 import { validateEmail } from "@/lib/validation";
 
 export type ForgotPasswordState = { ok?: boolean; error?: string };
@@ -12,7 +12,7 @@ export async function forgotPasswordAction(_prevState: ForgotPasswordState, form
   try {
     email = validateEmail(formData.get("email"));
     const h = await headers();
-    const ip = h.get("x-forwarded-for")?.split(",", 1)[0]?.trim() || h.get("x-real-ip")?.trim() || "unknown";
+    const ip = clientIp(h);
     const [ipRate, emailRate] = await Promise.all([
       consumeRateLimit(`forgot-ip:${ip}`, 5, 60 * 60 * 1000),
       consumeRateLimit(`forgot-email:${email}`, 3, 60 * 60 * 1000),

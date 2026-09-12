@@ -34,8 +34,18 @@ export async function consumeRateLimit(key: string, limit: number, windowMs: num
   };
 }
 
+/**
+ * The application deliberately never reads x-forwarded-for: a browser can
+ * send that header itself. Set TRUST_PROXY_HEADERS=true only when the Next.js
+ * process is reachable exclusively through Nginx, configured to overwrite
+ * X-Real-IP with $remote_addr (not to pass the client's value through).
+ */
+export function clientIp(headers: Headers): string {
+  if (process.env.TRUST_PROXY_HEADERS !== "true") return "unknown";
+  const realIp = headers.get("x-real-ip")?.trim();
+  return realIp && /^[0-9a-f:.]+$/i.test(realIp) ? realIp : "unknown";
+}
+
 export function requestFingerprint(request: Request): string {
-  const forwarded = request.headers.get("x-forwarded-for")?.split(",", 1)[0]?.trim();
-  const realIp = request.headers.get("x-real-ip")?.trim();
-  return forwarded || realIp || "unknown";
+  return clientIp(request.headers);
 }
