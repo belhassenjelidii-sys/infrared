@@ -6,8 +6,6 @@ import { getAuthSecret } from "./auth-secret";
 
 export const COOKIE_NAME = "infrared_session";
 
-const secret = getAuthSecret();
-
 export type SessionPayload = {
   userId: string;
   email: string;
@@ -20,7 +18,7 @@ export type SessionPayload = {
 
 export async function verifySessionToken(token: string): Promise<SessionPayload | null> {
   try {
-    const { payload } = await jwtVerify(token, secret);
+    const { payload } = await jwtVerify(token, getAuthSecret());
     return payload as unknown as SessionPayload;
   } catch {
     return null;

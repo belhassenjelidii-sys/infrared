@@ -7,7 +7,7 @@ import {
   uploadImageToSupabase,
   isSupabaseConfigured,
 } from "@/lib/supabase-storage";
-import { saveImageLocally } from "@/lib/uploads";
+import { getUploadStorageDriver, saveImageLocally } from "@/lib/uploads";
 import { processImage } from "@/lib/image-pipeline/pipeline";
 import { storePipelineOutput, storeTransparentProductImage } from "@/lib/image-pipeline/storage";
 import { analyzeTransparency, hasReusableAlpha, removeBackground } from "@/lib/image-pipeline/background-remover";
@@ -22,7 +22,8 @@ const ALLOWED_FOLDERS = new Set(["products", "brands", "categories", "stores", "
 
 
 async function storeVideo(buffer: Buffer, mime: "video/mp4" | "video/webm", folder: string) {
-  if (isSupabaseConfigured() || process.env.NODE_ENV === "production") {
+  if (getUploadStorageDriver() === "supabase") {
+    if (!isSupabaseConfigured()) throw new Error("Le stockage Supabase n'est pas configuré.");
     return uploadImageToSupabase(buffer, mime, folder);
   }
   const url = await saveImageLocally(buffer, mime);

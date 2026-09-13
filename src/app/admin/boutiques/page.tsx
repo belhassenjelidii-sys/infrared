@@ -137,6 +137,10 @@ export default async function AdminStoresPage() {
                 <input name="mobile" defaultValue={store.mobile} required className="mt-1 w-full rounded-lg border border-line px-3 py-2 text-sm" />
               </div>
               <div>
+                <label className="text-xs font-medium">E-mail de préparation (optionnel)</label>
+                <input name="email" type="email" defaultValue={store.email ?? ""} placeholder="boutique@infrared.tn" className="mt-1 w-full rounded-lg border border-line px-3 py-2 text-sm" />
+              </div>
+              <div>
                 <label className="text-xs font-medium">Fixe (optionnel)</label>
                 <input name="landline" defaultValue={store.landline ?? ""} className="mt-1 w-full rounded-lg border border-line px-3 py-2 text-sm" />
               </div>
@@ -188,6 +192,7 @@ export default async function AdminStoresPage() {
         <input name="name" placeholder="Nom" required className="rounded-lg border border-line px-3 py-2 text-sm" />
         <input name="address" placeholder="Adresse" required className="rounded-lg border border-line px-3 py-2 text-sm" />
         <input name="mobile" placeholder="Mobile" required className="rounded-lg border border-line px-3 py-2 text-sm" />
+        <input name="email" type="email" placeholder="E-mail de préparation (optionnel)" className="rounded-lg border border-line px-3 py-2 text-sm" />
         <input name="landline" placeholder="Fixe (optionnel)" className="rounded-lg border border-line px-3 py-2 text-sm" />
         <input name="mapsUrl" placeholder="Lien Google Maps (itinéraire)" className="rounded-lg border border-line px-3 py-2 text-sm sm:col-span-2" />
         <input name="mapsEmbedQuery" placeholder="Requête carte intégrée (optionnel)" className="rounded-lg border border-line px-3 py-2 text-sm sm:col-span-2" />

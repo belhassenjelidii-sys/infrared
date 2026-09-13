@@ -5,6 +5,12 @@ import { prisma } from "@/lib/prisma";
 import { deleteUploadedImageIfUnreferenced } from "@/lib/uploads";
 import { getOptionalText, getRequiredText, LIMITS, validateOptionalAssetUrl, validateOptionalUrl } from "@/lib/validation";
 
+function optionalEmail(formData: FormData) {
+  const value = getOptionalText(formData, "email", 254);
+  if (value && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) throw new Error("E-mail de la boutique invalide.");
+  return value?.toLowerCase() ?? null;
+}
+
 const DAYS = ["Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi", "Dimanche"] as const;
 
 function revalidateStoreViews(slug?: string) {
@@ -47,6 +53,7 @@ export async function createStoreAction(formData: FormData) {
       slug,
       address,
       mobile,
+      email: optionalEmail(formData),
       landline: getOptionalText(formData, "landline", LIMITS.phone),
       mapsUrl: validateOptionalUrl(formData.get("mapsUrl"), "Lien Google Maps"),
       mapsEmbedQuery: getOptionalText(formData, "mapsEmbedQuery", LIMITS.address) || address,
@@ -76,6 +83,7 @@ export async function updateStoreAction(id: string, formData: FormData) {
       slug,
       address: getRequiredText(formData, "address", "Adresse", LIMITS.address),
       mobile: getRequiredText(formData, "mobile", "Téléphone mobile", LIMITS.phone),
+      email: optionalEmail(formData),
       landline: getOptionalText(formData, "landline", LIMITS.phone),
       mapsUrl: validateOptionalUrl(formData.get("mapsUrl"), "Lien Google Maps"),
       mapsEmbedQuery: getOptionalText(formData, "mapsEmbedQuery", LIMITS.address),

@@ -2,7 +2,79 @@ import "server-only";
 import { unlink, writeFile, mkdir, rm } from "node:fs/promises";
 import path from "node:path";
 import crypto from "node:crypto";
-import { deleteImageFromSupabase } from "./supabase-storage";
+import { deleteImageFromSupabase, isSupabaseConfigured } from "./supabase-storage";
+
+export type UploadStorageDriver = "local" | "supabase";
+
+/**
+ * Selects a storage driver explicitly in production. The business layer only
+ * receives public URLs, so another driver (for example R2) can be added here
+ * later without changing products, brands, or upload forms.
+ */
+export function getUploadStorageDriver(): UploadStorageDriver {
+  const configured = process.env.UPLOAD_STORAGE?.trim().toLowerCase();
+  if (configured === "local" || configured === "supabase") return configured;
+  if (configured) throw new Error('UPLOAD_STORAGE invalide. Valeurs acceptées : "local" ou "supabase".');
+  if (process.env.NODE_ENV === "production") {
+    throw new Error('UPLOAD_STORAGE doit être défini explicitement en production.');
+  }
+  return isSupabaseConfigured() ? "supabase" : "local";
+}
+
+/** Directory mounted from the VPS in the production Docker container. */
+export function localUploadsDirectory(): string {
+  const directory = path.resolve(process.cwd(), "public", "uploads");
+  if (process.env.NODE_ENV === "production" && directory !== "/app/public/uploads") {
+    throw new Error("Le stockage local de production doit être monté sur /app/public/uploads.");
+  }
+  return directory;
+}
+
+function rejectUnsafeUploadPath(value: string): never {
+  throw new Error(`Chemin d'upload local invalide : ${value}`);
+}
+
+/**
+ * Resolves a generated file name and rejects every representation that could
+ * escape the uploads root: traversal, separators, absolute/Windows paths and
+ * percent-encoded variants. This is deliberately stricter than path.resolve.
+ */
+export function resolveLocalUploadPath(filename: string): string {
+  let decoded: string;
+  try {
+    decoded = decodeURIComponent(filename);
+  } catch {
+    return rejectUnsafeUploadPath(filename);
+  }
+  if (
+    !filename
+    || decoded !== filename
+    || filename.includes("/")
+    || filename.includes("\\")
+    || filename.includes("..")
+    || path.isAbsolute(filename)
+    || /^[a-z]:/i.test(filename)
+  ) return rejectUnsafeUploadPath(filename);
+
+  const root = localUploadsDirectory();
+  const resolved = path.resolve(root, filename);
+  const relative = path.relative(root, resolved);
+  if (!relative || relative.startsWith(`..${path.sep}`) || relative === ".." || path.isAbsolute(relative)) {
+    return rejectUnsafeUploadPath(filename);
+  }
+  return resolved;
+}
+
+function resolveLocalUploadUrl(url: string): string | null {
+  if (!url.startsWith("/uploads/")) return null;
+  const filename = url.slice("/uploads/".length);
+  if (!filename || url.includes("?") || url.includes("#")) return null;
+  try {
+    return resolveLocalUploadPath(filename);
+  } catch {
+    return null;
+  }
+}
 
 /**
  * Deletes an image regardless of where it was stored:
@@ -15,6 +87,19 @@ import { deleteImageFromSupabase } from "./supabase-storage";
  */
 export async function deleteUploadedImage(url: string | null | undefined) {
   if (!url) return;
+
+  const uploadPath = resolveLocalUploadUrl(url);
+  if (url.startsWith("/uploads/")) {
+    if (!uploadPath) return;
+    try {
+      await unlink(uploadPath);
+    } catch (error) {
+      const code = error && typeof error === "object" && "code" in error ? String(error.code) : "";
+      if (code !== "ENOENT") console.error("Suppression du fichier image impossible", uploadPath, error);
+    }
+    await clearNextImageCache();
+    return;
+  }
 
   const managedPrefixes = [
     "/uploads/",
@@ -85,11 +170,13 @@ const EXT_BY_MIME: Record<string, string> = {
  * the storage destination differs. Never used when NODE_ENV === "production".
  */
 export async function saveImageLocally(buffer: Buffer, mime: string): Promise<string> {
+  if (getUploadStorageDriver() !== "local") throw new Error("Le stockage local n'est pas activé.");
   const ext = EXT_BY_MIME[mime] ?? "jpg";
   const filename = `${Date.now().toString(36)}-${crypto.randomBytes(8).toString("hex")}.${ext}`;
-  const dir = path.join(process.cwd(), "public", "uploads");
+  const dir = localUploadsDirectory();
+  const destination = resolveLocalUploadPath(filename);
   await mkdir(dir, { recursive: true });
-  await writeFile(path.join(dir, filename), buffer);
+  await writeFile(destination, buffer, { flag: "wx" });
   return `/uploads/${filename}`;
 }
 

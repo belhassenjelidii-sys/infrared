@@ -8,8 +8,6 @@ import { prisma } from "./prisma";
 import { COOKIE_NAME, verifySessionToken, type SessionPayload } from "./session-edge";
 import { mustEnrollTwoFactor } from "./two-factor";
 
-const secret = getAuthSecret();
-
 export async function verifyPassword(plain: string, hash: string) {
   return bcrypt.compare(plain, hash);
 }
@@ -19,7 +17,7 @@ export async function createSessionToken(payload: SessionPayload) {
     .setProtectedHeader({ alg: "HS256" })
     .setIssuedAt()
     .setExpirationTime("7d")
-    .sign(secret);
+    .sign(getAuthSecret());
 }
 
 export async function setSessionCookie(token: string) {

@@ -1,6 +1,6 @@
 import "server-only";
 import { uploadImageToSupabase, isSupabaseConfigured } from "../supabase-storage";
-import { saveImageLocally } from "../uploads";
+import { getUploadStorageDriver, saveImageLocally } from "../uploads";
 import { prepareTransparentProductPng } from "./transparent-product";
 import type { GeneratedAsset, PipelineOutput, ProcessedImageResult } from "./types";
 
@@ -13,13 +13,13 @@ const MIME_BY_FORMAT: Record<GeneratedAsset["format"], "image/jpeg" | "image/png
 
 /**
  * STOCKAGE stage. Uploads one generated asset to Supabase Storage — or,
- * only outside production and only when Supabase isn't configured yet, to
- * the local `public/uploads/` fallback (see saveImageLocally) — so the
- * pipeline is Supabase-ready without hard-requiring it during local setup.
+ * or to the explicit local driver, mounted in production at
+ * `/app/public/uploads`. A future R2 driver belongs in this boundary.
  */
 async function storeAsset(asset: GeneratedAsset, folder: string): Promise<string> {
   const mime = MIME_BY_FORMAT[asset.format];
-  if (isSupabaseConfigured() || process.env.NODE_ENV === "production") {
+  if (getUploadStorageDriver() === "supabase") {
+    if (!isSupabaseConfigured()) throw new Error("Le stockage Supabase n'est pas configuré.");
     const { url } = await uploadImageToSupabase(asset.buffer, mime, folder);
     return url;
   }

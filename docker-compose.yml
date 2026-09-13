@@ -4,18 +4,38 @@ services:
     container_name: infrared-postgres
     restart: unless-stopped
     environment:
-      POSTGRES_USER: infrared
-      POSTGRES_PASSWORD: infrared_dev_password
-      POSTGRES_DB: infrared
+      POSTGRES_USER: ${POSTGRES_USER:-infrared}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-infrared_dev_password}
+      POSTGRES_DB: ${POSTGRES_DB:-infrared}
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     volumes:
       - infrared_postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U infrared -d infrared"]
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
       interval: 5s
       timeout: 5s
       retries: 10
+
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: infrared-web
+    restart: unless-stopped
+    env_file:
+      - ${INFRARED_ENV_FILE:-.env}
+    environment:
+      NODE_ENV: production
+      HOSTNAME: 0.0.0.0
+      PORT: 3000
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:3000:3000"
+    volumes:
+      - /var/www/infrared/uploads:/app/public/uploads
 
 volumes:
   infrared_postgres_data:
