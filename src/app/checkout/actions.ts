@@ -7,7 +7,7 @@ import type { ActionResult } from "@/components/ActionForm";
 import { getDelegations, getGovernorates, getLocalities } from "@/data/tunisia-addresses";
 import { CART_COOKIE, getCommerceSettings } from "@/lib/commerce";
 import { defaultCheckoutPayment, isCheckoutPaymentCompatible, type CheckoutFulfillment } from "@/lib/checkout-options";
-import { cartSubtotal, finalizeOrderFromCart, getOrderableCart, orderConfirmationPath } from "@/lib/order-finalization";
+import { CartPriceUpdatedError, cartSubtotal, finalizeOrderFromCart, getOrderableCart, orderConfirmationPath, updatedCartPricing } from "@/lib/order-finalization";
 import { createTndPayment, getTndPaymentConfig, getTndPaymentPublicStatus } from "@/lib/tnd-payment";
 import { prisma } from "@/lib/prisma";
 
@@ -53,11 +53,12 @@ export async function createOrderAction(_state: ActionResult, formData: FormData
     if (!features.cart || !features.checkout || !features.orders) throw new Error("La commande en ligne est désactivée.");
     const cartId = (await cookies()).get(CART_COOKIE)?.value;
     if (!cartId) throw new Error("Votre panier est vide.");
-    const cart = await getOrderableCart(cartId);
-    if (cart.priceUpdated) {
-      throw new Error("Le prix d’un ou plusieurs articles a changé. Votre panier a été actualisé, vérifiez-le puis confirmez à nouveau.");
-    }
     const fulfillment = String(formData.get("fulfillment") ?? "") as CheckoutFulfillment;
+    const cart = await getOrderableCart(cartId);
+    const deliveryFee = fulfillment === "DELIVERY" ? features.deliveryFee : 0;
+    if (cart.priceUpdated) {
+      return { error: "Le prix de certains articles a été mis à jour. Vérifiez votre panier avant de continuer.", priceUpdate: updatedCartPricing(cart, deliveryFee) };
+    }
     if (fulfillment === "DELIVERY" && !features.delivery) throw new Error("La livraison est désactivée.");
     if (fulfillment === "PICKUP" && !features.storePickup) throw new Error("Le retrait en boutique est désactivé.");
     if (!["DELIVERY", "PICKUP"].includes(fulfillment)) throw new Error("Choisissez un mode de remise.");
@@ -86,7 +87,6 @@ export async function createOrderAction(_state: ActionResult, formData: FormData
     const store = storeId ? await prisma.store.findFirst({ where: { id: storeId, active: true }, select: { id: true, name: true, address: true } }) : null;
     if (fulfillment === "PICKUP" && !store) throw new Error("La boutique choisie est indisponible.");
     const customerSnapshot = { name, email: email || null, phone } as Prisma.InputJsonObject;
-    const deliveryFee = fulfillment === "DELIVERY" ? features.deliveryFee : 0;
     const fulfillmentSnapshot = (fulfillment === "DELIVERY" ? {
       method: "DELIVERY",
       address,
@@ -117,6 +117,7 @@ export async function createOrderAction(_state: ActionResult, formData: FormData
       destination = orderConfirmationPath(result.orderNumber, result.publicToken);
     }
   } catch (error) {
+    if (error instanceof CartPriceUpdatedError) return { error: error.message, priceUpdate: error.pricing };
     return { error: error instanceof Error ? error.message : "Impossible de créer la commande." };
   }
   redirect(destination);

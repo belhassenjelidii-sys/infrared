@@ -34,13 +34,25 @@ export function cartSubtotal(cart: Awaited<ReturnType<typeof getOrderableCart>>)
   return cart.items.reduce((sum, item) => sum + Number(item.unitPrice) * item.quantity, 0);
 }
 
+export type UpdatedCartPricing = { items: { id: string; quantity: number; unitPrice: number }[]; subtotal: number; total: number };
+export function updatedCartPricing(cart: Awaited<ReturnType<typeof getOrderableCart>>, deliveryFee: number): UpdatedCartPricing {
+  const subtotal = cartSubtotal(cart);
+  return { items: cart.items.map((item) => ({ id: item.id, quantity: item.quantity, unitPrice: Number(item.unitPrice) })), subtotal, total: subtotal + deliveryFee };
+}
+
+export class CartPriceUpdatedError extends Error {
+  constructor(public readonly pricing: UpdatedCartPricing) {
+    super("Le prix de certains articles a été mis à jour. Vérifiez votre panier avant de continuer.");
+  }
+}
+
 export function orderConfirmationPath(orderNumber: string, publicToken: string) {
   return `/commande/${encodeURIComponent(orderNumber)}?token=${encodeURIComponent(publicToken)}`;
 }
 
 export async function finalizeOrderFromCart(input: { cartId: string; customerSnapshot: Prisma.InputJsonObject; fulfillmentSnapshot: Prisma.InputJsonObject; paymentMethod: string; paymentStatus?: string; externalPaymentId?: string; deliveryFee: number }) {
   const cart = await getOrderableCart(input.cartId);
-  if (cart.priceUpdated) throw new Error("Le prix d’un article a changé. Votre panier a été actualisé, vérifiez-le puis confirmez à nouveau.");
+  if (cart.priceUpdated) throw new CartPriceUpdatedError(updatedCartPricing(cart, input.deliveryFee));
   const total = cartSubtotal(cart) + input.deliveryFee;
   const orderNumber = `IR-${Date.now().toString(36).toUpperCase()}-${crypto.randomUUID().slice(0,4).toUpperCase()}`;
   const publicToken = randomBytes(32).toString("base64url");
