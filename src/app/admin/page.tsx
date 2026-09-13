@@ -76,7 +76,7 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
     { label: "Marques", value: brandCount, href: "/admin/marques", permission: "brands.manage" as const, icon: Tags, tone: "from-blue-500 to-blue-700", accent: "text-blue-400" },
     { label: "Stock faible", value: lowCount, href: "/admin/stocks?stock=low", permission: "stock.view" as const, icon: AlertTriangle, tone: "from-amber-500 to-amber-700", accent: "text-amber-400" },
   ];
-  const roles = (["SUPER_ADMIN", "ADMIN", "COMMERCIAL", "MARKETING"] as StaffRole[]).map((role) => ({ role, count: roleCounts.find((item) => item.role === role)?._count._all ?? 0 }));
+  const roles = (["SUPER_ADMIN", "ADMIN", "GESTIONNAIRE", "COMMERCIAL", "MARKETING"] as StaffRole[]).map((role) => ({ role, count: roleCounts.find((item) => item.role === role)?._count._all ?? 0 }));
 
   return <AdminShell active="/admin">
     <div className="mb-6"><p className="text-xs font-semibold uppercase tracking-[.2em] text-violet-400">Administration InfraRed</p><h1 className="mt-2 text-3xl font-bold tracking-tight sm:text-4xl">Dashboard</h1><p className="mt-1 text-sm text-slate-400">Bienvenue sur votre espace de gestion InfraRed Optic Store.</p></div>

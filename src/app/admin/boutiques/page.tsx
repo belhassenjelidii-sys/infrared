@@ -3,6 +3,7 @@ import { getSiteSettings } from "@/lib/site-data";
 import { getHoursForDay, getStoreLiveStatus, parseStoreHours, storeStatusLabel } from "@/lib/store-hours";
 import Link from "next/link";
 import { requirePagePermission } from "@/lib/authz";
+import { can } from "@/lib/permissions";
 import AdminShell from "@/components/AdminShell";
 import ConfirmSubmitButton from "@/components/ConfirmSubmitButton";
 import ImageUploadField from "@/components/ImageUploadField";
@@ -35,7 +36,8 @@ function defaultHoursFor(day: string, globalHours: Array<{ day: string; hours: s
 }
 
 export default async function AdminStoresPage() {
-  const session = await requirePagePermission("stores.manage");
+  const session = await requirePagePermission("stores.view");
+  const canManageStores = can(session, "stores.manage");
   const [settings, stores] = await Promise.all([
     getSiteSettings(),
     prisma.store.findMany({ orderBy: { sortOrder: "asc" } }),
@@ -54,7 +56,7 @@ export default async function AdminStoresPage() {
       <p className="eyebrow text-red">Gestion</p>
       <h1 className="font-display mt-2 text-3xl">Nos boutiques</h1>
       <p className="mt-2 max-w-2xl text-sm text-stone">
-        Modifiez chaque boutique, ses horaires et son statut. Les changements sont visibles sur la page publique <code>/boutique</code>.
+        {canManageStores ? "Modifiez chaque boutique, ses horaires et son statut." : "Consultez les informations de chaque boutique."} Les informations sont visibles sur la page publique <code>/boutique</code>.
       </p>
 
       <div className="mt-8 rounded-2xl border border-line bg-white p-5">
@@ -79,14 +81,14 @@ export default async function AdminStoresPage() {
                   </span>
                 </div>
               </div>
-              <form action={deleteStoreAction.bind(null, store.id)}>
+              {canManageStores && <form action={deleteStoreAction.bind(null, store.id)}>
                 <ConfirmSubmitButton
                   confirmMessage={`Supprimer la boutique "${store.name}" ?`}
                   className="rounded-full border border-red/30 px-3 py-1 text-xs text-red hover:bg-red hover:text-white"
                 >
                   Supprimer
                 </ConfirmSubmitButton>
-              </form>
+              </form>}
             </div>
 
             <div className="mt-2 flex items-center gap-2 text-xs text-stone">
@@ -98,7 +100,7 @@ export default async function AdminStoresPage() {
 
             <StoreMediaPreview store={store} />
 
-            <div className="mt-4 flex flex-wrap gap-2 border-y border-line py-3">
+            {canManageStores && <div className="mt-4 flex flex-wrap gap-2 border-y border-line py-3">
               <form action={setStoreStatusOverrideAction.bind(null, store.id, "auto")}>
                 <button className={`rounded-full border px-4 py-2 text-xs font-medium ${store.statusOverride === "auto" ? "border-ink bg-ink text-white" : "border-line hover:border-ink"}`}>
                   Selon horaires
@@ -114,9 +116,10 @@ export default async function AdminStoresPage() {
                   Fermée
                 </button>
               </form>
-            </div>
+            </div>}
 
             <form action={updateStoreAction.bind(null, store.id)} className="mt-4 grid gap-3 sm:grid-cols-2">
+              <fieldset disabled={!canManageStores} className="contents">
               <div>
                 <label className="text-xs font-medium">Nom</label>
                 <input name="name" defaultValue={store.name} required className="mt-1 w-full rounded-lg border border-line px-3 py-2 text-sm" />
@@ -174,12 +177,13 @@ export default async function AdminStoresPage() {
               <div className="sm:col-span-2">
                 <button className="rounded-full bg-red px-5 py-2.5 text-sm font-medium text-white hover:bg-red-dark">Enregistrer la boutique</button>
               </div>
+              </fieldset>
             </form>
           </div>
         ))}
       </div>
 
-      <form action={createStoreAction} className="mt-8 grid gap-3 rounded-2xl border border-dashed border-line bg-white p-5 sm:grid-cols-2">
+      {canManageStores && <form action={createStoreAction} className="mt-8 grid gap-3 rounded-2xl border border-dashed border-line bg-white p-5 sm:grid-cols-2">
         <h3 className="font-display text-lg sm:col-span-2">+ Nouvelle boutique</h3>
         <input name="name" placeholder="Nom" required className="rounded-lg border border-line px-3 py-2 text-sm" />
         <input name="address" placeholder="Adresse" required className="rounded-lg border border-line px-3 py-2 text-sm" />
@@ -208,7 +212,7 @@ export default async function AdminStoresPage() {
           <ImageUploadField name="photo" label="Photo de couverture (optionnel)" folder="stores" />
         </div>
         <button className="sm:col-span-2 rounded-full bg-red py-2.5 text-sm font-medium text-white hover:bg-red-dark">Ajouter</button>
-      </form>
+      </form>}
     </AdminShell>
   );
 }

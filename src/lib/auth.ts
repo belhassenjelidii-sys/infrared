@@ -6,6 +6,7 @@ import { cookies } from "next/headers";
 import { getAuthSecret } from "./auth-secret";
 import { prisma } from "./prisma";
 import { COOKIE_NAME, verifySessionToken, type SessionPayload } from "./session-edge";
+import { mustEnrollTwoFactor } from "./two-factor";
 
 const secret = getAuthSecret();
 
@@ -49,11 +50,11 @@ export async function getSession(): Promise<SessionPayload | null> {
   // expires. Re-check `active` here (Node runtime, not edge middleware —
   // Prisma isn't available there) so a deactivation takes effect on the
   // very next page load / action, not up to a week later.
-  const user = await prisma.user.findUnique({ where: { id: payload.userId }, select: { active: true, authVersion: true, role: true, name: true, email: true, permissionOverrides: true } });
+  const user = await prisma.user.findUnique({ where: { id: payload.userId }, select: { active: true, authVersion: true, role: true, name: true, email: true, permissionOverrides: true, twoFactorEnabled: true } });
   if (!user?.active || user.authVersion !== payload.authVersion) return null;
 
   const policy = await prisma.rolePolicy.findUnique({ where: { role: user.role } });
-  return { ...payload, role: user.role, name: user.name, email: user.email, permissions: resolvePermissions(user.role, policy?.permissions, user.permissionOverrides) };
+  return { ...payload, role: user.role, name: user.name, email: user.email, permissions: resolvePermissions(user.role, policy?.permissions, user.permissionOverrides), twoFactorSetupRequired: mustEnrollTwoFactor(user) };
 }
 
 export async function authenticate(email: string, password: string) {
@@ -68,6 +69,7 @@ export async function authenticate(email: string, password: string) {
     name: user.name,
     role: user.role,
     authVersion: user.authVersion,
+    twoFactorEnabled: user.twoFactorEnabled,
   };
 }
 

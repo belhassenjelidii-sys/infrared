@@ -1,9 +1,9 @@
 import Link from "next/link";
 import type { LucideIcon } from "lucide-react";
 import {
-  Archive, ArrowUpRight, Bell, Boxes, CalendarDays, CreditCard, FileImage, Glasses,
+  Archive, ArrowUpRight, Bell, Boxes, CalendarDays, ClipboardList, CreditCard, FileImage, Glasses,
   Image as ImageIcon, Layers3, LayoutDashboard, LogOut, Menu, Package, Percent,
-  Search, Settings, ShieldCheck, ShoppingCart, SlidersHorizontal, Sparkles, Store,
+  KeyRound, Search, Settings, ShieldCheck, ShoppingCart, SlidersHorizontal, Sparkles, Store,
   Tags, TrendingUp, Truck, Users, UsersRound,
 } from "lucide-react";
 import { logoutAction } from "@/app/login/actions";
@@ -35,10 +35,12 @@ const navigation = (features: Features): { label: string; items: NavItem[] }[] =
     { href: features.orders ? "/admin/clients" : "/admin/configuration#ecommerce", label: "Clients", permission: "orders.view", icon: UsersRound, status: featureLabel(features.orders) },
     { href: "/admin/promotions", label: "Promotions", permission: "promotions.manage", icon: Percent },
   ] },
-  { label: "", items: [{ href: "/admin/boutiques", label: "Boutiques", permission: "stores.manage", icon: Store }] },
+  { label: "", items: [{ href: "/admin/boutiques", label: "Boutiques", permission: "stores.view", icon: Store }] },
   { label: "Administration", items: [
+    { href: "/admin/securite", label: "Sécurité du compte", permission: "dashboard.view", icon: KeyRound },
     { href: "/admin/utilisateurs", label: "Utilisateurs", permission: "users.view", icon: Users },
     { href: "/admin/roles", label: "Rôles / Permissions", permission: "roles.manage", icon: ShieldCheck },
+    { href: "/admin/journal", label: "Journal", permission: "audit.view", icon: ClipboardList },
   ] },
   { label: "Paramètres", items: [
     { href: "/admin/parametres", label: "Général", permission: "content.manage", icon: Settings },

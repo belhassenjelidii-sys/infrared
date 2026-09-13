@@ -2,17 +2,18 @@ export const PERMISSIONS = [
   "dashboard.view", "products.view", "products.create", "products.edit", "products.archive", "products.delete",
   "prices.view", "prices.edit", "stock.view", "stock.edit", "images.manage",
   "models.view", "models.create", "models.edit", "models.delete", "models.manage", "brands.manage", "categories.manage",
-  "content.manage", "seo.manage", "promotions.manage", "stores.manage", "messages.manage",
+  "content.manage", "seo.manage", "promotions.manage", "stores.view", "stores.manage", "messages.manage",
   "users.view", "users.create", "users.edit", "users.delete", "roles.manage", "settings.manage", "settings.critical", "audit.view",
   "orders.view", "orders.edit", "payments.manage",
 ] as const;
 export type Permission = typeof PERMISSIONS[number];
-export type StaffRole = "SUPER_ADMIN" | "ADMIN" | "COMMERCIAL" | "MARKETING" | "DEVELOPER";
-export const ROLE_LABELS: Record<StaffRole,string> = { SUPER_ADMIN: "Super administrateur", ADMIN: "Administrateur", COMMERCIAL: "Commercial", MARKETING: "Marketing", DEVELOPER: "Développeur (historique)" };
+export type StaffRole = "SUPER_ADMIN" | "ADMIN" | "GESTIONNAIRE" | "COMMERCIAL" | "MARKETING" | "DEVELOPER";
+export const ROLE_LABELS: Record<StaffRole,string> = { SUPER_ADMIN: "Super administrateur", ADMIN: "Administrateur", GESTIONNAIRE: "Gestionnaire", COMMERCIAL: "Commercial", MARKETING: "Marketing", DEVELOPER: "Développeur (historique)" };
 export const DEFAULT_PERMISSIONS: Record<StaffRole,readonly Permission[]> = {
   SUPER_ADMIN: PERMISSIONS,
   DEVELOPER: PERMISSIONS,
   ADMIN: PERMISSIONS.filter((p) => !["roles.manage", "settings.critical", "payments.manage"].includes(p)),
+  GESTIONNAIRE: ["dashboard.view", "products.view", "products.create", "products.edit", "products.archive", "prices.view", "prices.edit", "stock.view", "stock.edit", "images.manage", "models.view", "models.create", "models.edit", "models.manage", "brands.manage", "categories.manage", "promotions.manage", "stores.view", "orders.view", "orders.edit", "audit.view"],
   COMMERCIAL: ["dashboard.view", "products.view", "products.create", "products.edit", "prices.view", "prices.edit", "stock.view", "stock.edit", "images.manage", "models.view", "models.create", "models.edit", "models.manage"],
   MARKETING: ["dashboard.view", "products.view", "products.edit", "models.view", "images.manage", "content.manage", "seo.manage"],
 };

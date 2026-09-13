@@ -27,11 +27,11 @@ export const ROLE_GROUPS = {
   /** Full back-office: products, brands, categories, promotions, users, settings. */
   FULL_ADMIN: ["SUPER_ADMIN", "ADMIN", "DEVELOPER"] as const,
   /** Boutiques + paramètres — content editable by commercial staff too. */
-  CONTENT: ["SUPER_ADMIN", "ADMIN", "DEVELOPER", "COMMERCIAL", "MARKETING"] as const,
+  CONTENT: ["SUPER_ADMIN", "ADMIN", "DEVELOPER", "GESTIONNAIRE", "COMMERCIAL", "MARKETING"] as const,
   /** /commercial space: price, availability, photos. */
-  STAFF: ["SUPER_ADMIN", "ADMIN", "DEVELOPER", "COMMERCIAL", "MARKETING"] as const,
+  STAFF: ["SUPER_ADMIN", "ADMIN", "DEVELOPER", "GESTIONNAIRE", "COMMERCIAL", "MARKETING"] as const,
   /** Any authenticated + active back-office account. */
-  ANY: ["SUPER_ADMIN", "ADMIN", "DEVELOPER", "COMMERCIAL", "MARKETING"] as const,
+  ANY: ["SUPER_ADMIN", "ADMIN", "DEVELOPER", "GESTIONNAIRE", "COMMERCIAL", "MARKETING"] as const,
 } as const;
 
 /**
@@ -48,7 +48,7 @@ export async function requireRole(
   allowedRoles: readonly string[]
 ): Promise<SessionPayload> {
   const session = await getSession();
-  if (!session || !allowedRoles.includes(session.role)) {
+  if (!session || session.twoFactorSetupRequired || !allowedRoles.includes(session.role)) {
     throw new UnauthorizedError();
   }
   return session;
@@ -97,12 +97,14 @@ export async function requireStaff() {
 export async function requirePermission(permission: Permission): Promise<SessionPayload> {
   const session=await getSession();
   if(!session) throw new UnauthorizedError("Connectez-vous pour continuer.");
+  if(session.twoFactorSetupRequired) throw new UnauthorizedError("Activez l’authentification à deux facteurs pour continuer.");
   if(!can(session,permission)) throw new UnauthorizedError("Vous ne disposez pas de cette permission.");
   return session;
 }
 export async function requirePagePermission(permission: Permission) {
   const session=await getSession();
   if(!session) redirect("/login");
+  if(session.twoFactorSetupRequired) redirect("/admin/securite");
   if(!can(session,permission)) redirect("/admin/acces-refuse");
   return session;
 }

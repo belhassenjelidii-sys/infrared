@@ -12,9 +12,10 @@ export type SessionPayload = {
   userId: string;
   email: string;
   name: string;
-  role: "SUPER_ADMIN" | "ADMIN" | "COMMERCIAL" | "MARKETING" | "DEVELOPER";
+  role: "SUPER_ADMIN" | "ADMIN" | "GESTIONNAIRE" | "COMMERCIAL" | "MARKETING" | "DEVELOPER";
   authVersion: number;
   permissions?: string[];
+  twoFactorSetupRequired?: boolean;
 };
 
 export async function verifySessionToken(token: string): Promise<SessionPayload | null> {
