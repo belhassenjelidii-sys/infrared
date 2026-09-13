@@ -24,7 +24,8 @@ export async function finalizeTndPaymentSession(sessionId: string, requestedPaym
   if (!verification.paid || verification.currency !== "TND" || verification.amountMillimes !== expectedMillimes) {
     throw new Error("Le paiement TND n’a pas été confirmé avec le montant attendu.");
   }
-  await getOrderableCart(session.cartId);
+  const cart = await getOrderableCart(session.cartId);
+  if (cart.priceUpdated) throw new Error("Le prix d’un article a changé. Votre panier a été actualisé, aucun ordre n’a été créé.");
   const fulfillment = jsonObject(session.fulfillmentSnapshot ?? {});
   const deliveryFee = fulfillment.method === "DELIVERY" ? Number(fulfillment.fee ?? 0) : 0;
   const result = await finalizeOrderFromCart({

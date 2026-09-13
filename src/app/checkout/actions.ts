@@ -54,6 +54,9 @@ export async function createOrderAction(_state: ActionResult, formData: FormData
     const cartId = (await cookies()).get(CART_COOKIE)?.value;
     if (!cartId) throw new Error("Votre panier est vide.");
     const cart = await getOrderableCart(cartId);
+    if (cart.priceUpdated) {
+      throw new Error("Le prix d’un ou plusieurs articles a changé. Votre panier a été actualisé, vérifiez-le puis confirmez à nouveau.");
+    }
     const fulfillment = String(formData.get("fulfillment") ?? "") as CheckoutFulfillment;
     if (fulfillment === "DELIVERY" && !features.delivery) throw new Error("La livraison est désactivée.");
     if (fulfillment === "PICKUP" && !features.storePickup) throw new Error("Le retrait en boutique est désactivé.");

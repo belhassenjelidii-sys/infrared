@@ -21,7 +21,8 @@ export async function GET(request: Request) {
     if (alreadyCreated) return NextResponse.redirect(new URL(orderConfirmationPath(alreadyCreated.number, alreadyCreated.publicToken), url.origin));
     const session = await prisma.onlinePaymentSession.findUnique({ where: { id: sessionId } });
     if (!session || session.paypalOrderId !== paypalOrderId || session.expiresAt < new Date()) throw new Error("La session de paiement a expiré.");
-    await getOrderableCart(session.cartId);
+    const cart = await getOrderableCart(session.cartId);
+    if (cart.priceUpdated) throw new Error("Le prix d’un article a changé. Votre panier a été actualisé, aucun ordre n’a été créé.");
     const config = await getPayPalConfig();
     if (config.currency !== session.currency) throw new Error("La devise PayPal a changé pendant le paiement.");
     const capture = await capturePayPalOrder(config, paypalOrderId);

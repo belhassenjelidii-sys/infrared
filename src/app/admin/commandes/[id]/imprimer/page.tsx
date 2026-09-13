@@ -7,7 +7,7 @@ import { prisma } from "@/lib/prisma";
 
 const object=(value:unknown)=>value&&typeof value==="object"&&!Array.isArray(value)?value as Record<string,unknown>:{};
 const paymentLabel=(method:string|null)=>method==="PAYPAL"?"PayPal · payé":method==="CASH_ON_DELIVERY"?"Paiement à la livraison":"Paiement en boutique";
-const statusLabel:Record<string,string>={NEW:"Nouvelle",CONFIRMED:"Confirmée",PREPARING:"En préparation",SHIPPED:"Expédiée",DELIVERED:"Livrée",CANCELLED:"Annulée"};
+const statusLabel:Record<string,string>={DRAFT:"Brouillon",NEW:"Nouvelle",CONFIRMED:"Confirmée",PREPARING:"En préparation",SHIPPED:"Expédiée",DELIVERED:"Livrée",CANCELLED:"Annulée"};
 
 export default async function PrintOrderPage({params,searchParams}:{params:Promise<{id:string}>;searchParams:Promise<{type?:string}>}) {
   await requirePagePermission("orders.view");

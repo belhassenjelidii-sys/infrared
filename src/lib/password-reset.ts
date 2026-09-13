@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { sendEmail } from "@/lib/email";
 import { hashToken, randomToken } from "@/lib/secrets";
 import bcrypt from "bcryptjs";
+import { writeAuditLog } from "@/lib/audit-log";
 
 function escapeHtml(value: string): string {
   return value
@@ -53,6 +54,7 @@ export async function requestPasswordReset(email: string): Promise<void> {
   const created = await prisma.passwordResetToken.create({
     data: { tokenHash, userId: user.id, expiresAt },
   });
+  await writeAuditLog(prisma, { actor: { userId: user.id, name: user.name, email: user.email }, category: "AUTH", action: "auth.password_reset.request", entityType: "User", entityId: user.id });
 
   try {
     const baseUrl = await getPublicSiteUrl();
@@ -83,7 +85,7 @@ export async function resetPassword(token: string, password: string): Promise<vo
   await prisma.$transaction(async (tx) => {
     const record = await tx.passwordResetToken.findUnique({
       where: { tokenHash },
-      include: { user: { select: { id: true, active: true } } },
+      include: { user: { select: { id: true, active: true, name: true, email: true, role: true } } },
     });
 
     if (!record || record.usedAt || record.expiresAt <= now || !record.user.active) {
@@ -107,5 +109,6 @@ export async function resetPassword(token: string, password: string): Promise<vo
     await tx.passwordResetToken.deleteMany({
       where: { userId: record.user.id, id: { not: record.id } },
     });
+    await writeAuditLog(tx, { actor: { userId: record.user.id, name: record.user.name, email: record.user.email, role: record.user.role }, category: "AUTH", action: "auth.password_reset.complete", entityType: "User", entityId: record.user.id });
   });
 }
