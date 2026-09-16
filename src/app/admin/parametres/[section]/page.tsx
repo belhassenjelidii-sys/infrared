@@ -43,7 +43,7 @@ export default async function HomeSectionPage({ params }: { params: Promise<{ se
     {section === "hero" ? <form action={action} className="grid max-w-4xl gap-5 rounded-2xl border border-line bg-white p-6 sm:p-8">
       <div className="grid gap-4 sm:grid-cols-2"><Field name="heroTitle" label="Titre principal" value={settings?.heroTitle ?? ""} /><Field name="heroCtaLabel" label="Texte du bouton" value={settings?.heroCtaLabel ?? ""} /></div>
       <label className="grid gap-1 text-sm font-medium">Sous-titre<textarea name="heroSubtitle" defaultValue={settings?.heroSubtitle ?? ""} rows={3} className="rounded-lg border border-line p-3 text-sm" /></label>
-      <HeroMediaPicker initialMediaType={settings?.heroMediaType === "video" ? "video" : "image"} initialImageUrl={settings?.heroImageUrl ?? null} initialVideoUrl={settings?.heroVideoUrl ?? null} initialScale={settings?.heroMediaScale ?? 125} initialX={settings?.heroMediaX ?? 0} initialY={settings?.heroMediaY ?? 0} />
+      <HeroMediaPicker initialMediaType={settings?.heroMediaType === "video" ? "video" : "image"} initialImageUrl={settings?.heroImageUrl ?? null} initialVideoUrl={settings?.heroVideoUrl ?? null} initialScale={settings?.heroMediaScale ?? 125} initialX={settings?.heroMediaX ?? 0} initialY={settings?.heroMediaY ?? 0} initialTitle={settings?.heroTitle} initialSubtitle={settings?.heroSubtitle} initialCta={settings?.heroCtaLabel} />
       <button className="min-h-12 rounded-full bg-red px-6 text-sm font-medium text-white hover:bg-red-dark">Enregistrer le texte du Hero</button>
     </form> : section === "inspiration" ? <InspirationForm content={content} /> :
     <form action={action} className="grid max-w-4xl gap-5 rounded-2xl border border-line bg-white p-6 sm:p-8">

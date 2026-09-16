@@ -54,7 +54,7 @@ function BrandSet({ brands, ariaHidden = false }: { brands: Brand[]; ariaHidden?
           className="brand-marquee-item group/brand flex w-[92px] shrink-0 flex-col items-center text-center focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-red"
         >
           <span className="relative block h-[62px] w-[62px] overflow-hidden rounded-xl border border-black/10 bg-[#f1f1f1] p-1 transition-transform duration-300 group-hover/brand:-translate-y-1 sm:h-[70px] sm:w-[70px]">
-            {b.photo ? <ManagedImage src={b.photo} alt={`Collection ${b.name}`} fill sizes="96px" quality={90} className="object-cover" /> : b.sprite ? <SpritePhoto sprite={b.sprite} name={b.name} /> : b.logo ? <img src={b.logo} alt={`Logo ${b.name}`} className="h-full w-full object-contain p-2" /> : <span className="grid h-full w-full place-items-center text-xs font-semibold text-black/50">{b.name.slice(0, 2).toUpperCase()}</span>}
+            {b.photo ? <ManagedImage src={b.photo} alt={`Collection ${b.name}`} fill sizes="96px" quality={90} className="object-cover" /> : b.sprite ? <SpritePhoto sprite={b.sprite} name={b.name} /> : b.logo ? <ManagedImage src={b.logo} alt={`Logo ${b.name}`} fill sizes="96px" className="object-contain p-2" /> : <span className="grid h-full w-full place-items-center text-xs font-semibold text-black/50">{b.name.slice(0, 2).toUpperCase()}</span>}
           </span>
           <span className="mt-3 line-clamp-2 text-[9px] font-medium uppercase tracking-[0.04em] text-black">{b.name}</span>
         </Link>

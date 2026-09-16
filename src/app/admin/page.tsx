@@ -79,7 +79,7 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
   const roles = (["SUPER_ADMIN", "ADMIN", "GESTIONNAIRE", "COMMERCIAL", "MARKETING"] as StaffRole[]).map((role) => ({ role, count: roleCounts.find((item) => item.role === role)?._count._all ?? 0 }));
 
   return <AdminShell active="/admin">
-    <div className="mb-6"><p className="text-xs font-semibold uppercase tracking-[.2em] text-violet-400">Administration InfraRed</p><h1 className="mt-2 text-3xl font-bold tracking-tight sm:text-4xl">Dashboard</h1><p className="mt-1 text-sm text-slate-400">Bienvenue sur votre espace de gestion InfraRed Optic Store.</p></div>
+    <div className="mb-6"><p className="text-xs font-semibold uppercase tracking-[.2em] text-violet-400">Administration InfraRed</p><h1 className="mt-2 text-3xl font-bold tracking-tight sm:text-4xl">Tableau de bord</h1><p className="mt-1 text-sm text-slate-400">Bienvenue sur votre espace de gestion InfraRed Optic Store.</p></div>
 
     {newOrderCount>0&&<Link href="/admin/notifications/commandes" className="mb-5 flex items-center justify-between rounded-2xl border border-red-500/30 bg-red-500/10 p-4"><span><strong className="block">{newOrderCount} nouvelle(s) commande(s)</strong><span className="mt-1 block text-xs text-stone">Ouvrez les commandes pour les confirmer, les imprimer et préparer la livraison.</span></span><ArrowRight className="text-red"/></Link>}
 

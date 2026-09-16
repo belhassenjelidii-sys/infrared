@@ -1,8 +1,8 @@
 "use client";
 
 import { useRef, useState } from "react";
-import Image from "next/image";
 import { ImagePlus, Loader2, UploadCloud, X, CheckCircle } from "lucide-react";
+import ManagedImage from "@/components/ManagedImage";
 
 type Props = {
   name: string;
@@ -186,20 +186,14 @@ export default function ImageUploadField({
         <div className={`relative overflow-hidden rounded-xl border border-line bg-mist ${compact ? "h-32" : "aspect-video"}`}>
           {kind === "video" ? (
             <video src={preview} controls muted className="h-full w-full object-contain" />
-          ) : preview.startsWith("http") ? (
-            // An existing external URL may point to any host. It is shown
-            // directly here so editing a legacy logo never depends on the
-            // Next.js image-host allow-list. Imported URLs are copied through
-            // our image pipeline and then use the optimized local path below.
-            <img src={preview} alt="Aperçu" className="h-full w-full object-contain p-2" />
           ) : (
-            <Image
+            <ManagedImage
               src={preview}
               alt="Aperçu"
               fill
               quality={100}
               className="object-contain p-2"
-              unoptimized={preview.startsWith("/uploads/")}
+              unoptimized={preview.startsWith("/uploads/") || preview.startsWith("http")}
             />
           )}
           {busy && (

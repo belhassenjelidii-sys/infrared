@@ -179,11 +179,11 @@ export default function CatalogueControls({
           <span className="font-medium text-ink">{resultCount}</span> monture
           {resultCount > 1 ? "s" : ""}
         </p>
-        <div className="flex items-center gap-3">
+        <div className="flex min-w-0 items-center gap-3">
           <select
             value={active.sort}
             onChange={(e) => setParam("sort", e.target.value)}
-            className="border-0 bg-white px-2 py-2 text-xs font-semibold uppercase tracking-wider outline-none"
+            className="min-w-0 max-w-[150px] border-0 bg-white px-2 py-2 text-xs font-semibold uppercase tracking-wider outline-none sm:max-w-none"
           >
             {SORTS.filter((s) => showPrices || !s.value.startsWith("prix-")).map((s) => (
               <option key={s.value} value={s.value}>

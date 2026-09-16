@@ -522,6 +522,46 @@ model DeliveryCompany {
   @@map("delivery_companies")
 }
 
+/// Référentiel administrable des adresses proposées au checkout.
+/// Les commandes conservent leur adresse sous forme de snapshot JSON.
+model AddressGovernorate {
+  id          String              @id @default(cuid())
+  name        String              @unique
+  delegations AddressDelegation[]
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+
+  @@map("address_governorates")
+}
+
+model AddressDelegation {
+  id            String             @id @default(cuid())
+  name          String
+  governorateId String
+  governorate   AddressGovernorate @relation(fields: [governorateId], references: [id], onDelete: Cascade)
+  localities    AddressLocality[]
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
+
+  @@unique([governorateId, name])
+  @@index([governorateId])
+  @@map("address_delegations")
+}
+
+model AddressLocality {
+  id           String            @id @default(cuid())
+  name         String
+  postalCode   String?
+  delegationId String
+  delegation   AddressDelegation @relation(fields: [delegationId], references: [id], onDelete: Cascade)
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+
+  @@unique([delegationId, name, postalCode])
+  @@index([delegationId])
+  @@map("address_localities")
+}
+
 model OnlinePaymentSession {
   id                  String   @id
   cartId              String

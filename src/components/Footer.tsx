@@ -3,13 +3,8 @@ import { AtSign, MapPin, Phone, MessageCircle, Award, Glasses, ShieldCheck } fro
 import Logo from "./Logo";
 import { getSiteSettings, getDbStores } from "@/lib/site-data";
 import { buildWhatsAppLink, generateGeneralWhatsAppMessage } from "@/lib/whatsapp";
-import { storeSearchLabel } from "@/lib/local-seo";
 
 const STAT_ICONS = [Award, Glasses, ShieldCheck];
-
-function mapsHref(store: { mapsUrl: string; mapsEmbedQuery: string; address: string }) {
-  return store.mapsUrl || `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(store.mapsEmbedQuery || store.address)}`;
-}
 
 export default async function Footer() {
   const settings = await getSiteSettings();
@@ -19,11 +14,11 @@ export default async function Footer() {
   const waLink = buildWhatsAppLink(settings.whatsapp, generateGeneralWhatsAppMessage());
 
   return (
-    <footer className="border-t border-black bg-[#08090b] text-white">
+    <footer className="border-t border-black/70 bg-[#0c1016] text-white">
       {/* "Pourquoi InfraRed" — entièrement modifiable (et masquable) depuis /admin/parametres */}
       {settings.aboutEnabled && (
-        <div className="border-b border-white/10">
-          <div className="mx-auto grid max-w-7xl gap-10 px-5 py-14 sm:px-8 lg:grid-cols-3">
+        <div className="border-b border-white/10 bg-white/[0.02]">
+          <div className="mx-auto grid max-w-[1400px] gap-5 px-5 py-6 sm:px-8 lg:grid-cols-3">
             <div>
               <p className="eyebrow text-red">{settings.aboutEyebrow}</p>
               <h2 className="font-display mt-2 text-2xl sm:text-3xl">{settings.aboutTitle}</h2>
@@ -47,15 +42,15 @@ export default async function Footer() {
         </div>
       )}
 
-      <div className="mx-auto grid max-w-7xl gap-10 px-5 py-14 sm:px-8 md:grid-cols-4">
+      <div className="mx-auto grid max-w-[1400px] items-start gap-x-7 gap-y-6 px-5 py-7 sm:px-8 md:grid-cols-2 lg:grid-cols-[1.05fr_0.78fr_1.3fr_0.95fr] lg:gap-x-8 lg:gap-y-5">
         <div>
           <Logo variant="reversed" src={settings.logoUrl} height={Math.min(settings.logoHeight, 48)} />
-          <p className="mt-5 max-w-xs text-sm leading-6 text-white/80">
+          <p className="mt-4 max-w-xs text-sm leading-6 text-white/80">
             Opticien premium. Montures solaires et optiques
             sélectionnées avec exigence, conseil personnalisé dans nos
             boutiques.
           </p>
-          <div className="mt-5 flex gap-3">
+          <div className="mt-4 flex gap-3">
             {settings.facebook && (
               <a
                 href={settings.facebook}
@@ -82,8 +77,8 @@ export default async function Footer() {
         </div>
 
         <div>
-          <p className="eyebrow text-white/70">Navigation</p>
-          <ul className="mt-4 space-y-3 text-sm text-white/85">
+          <p className="eyebrow text-white/85">Navigation</p>
+          <ul className="mt-3 space-y-2.5 text-sm text-white/85">
             <li><Link href="/catalogue" className="transition-colors hover:text-red">Lunettes</Link></li>
             <li><Link href="/marques" className="transition-colors hover:text-red">Marques</Link></li>
             {settings.showPrices && <li><Link href="/promotions" className="transition-colors hover:text-red">Promotions</Link></li>}
@@ -94,27 +89,17 @@ export default async function Footer() {
         </div>
 
         <div>
-          <p className="eyebrow text-white/70">Nos boutiques</p>
-          {stores.length > 0 && (
-            <p className="mt-3 text-xs leading-5 text-white/70">
-              Votre opticien au Kram, à Tunisia Mall et à El Aouina.
-            </p>
-          )}
-          <ul className="mt-4 space-y-4 text-sm leading-6 text-white/85">
+          <p className="eyebrow text-white/85">Nos boutiques</p>
+          <ul className="mt-3 space-y-1.5 text-sm leading-5 text-white/85">
             {stores.length === 0 && (
               <li className="text-white/40">Boutiques à venir — ajoutez-les depuis /admin/boutiques.</li>
             )}
             {stores.map((s) => (
               <li key={s.id}>
-                <div className="flex items-start gap-2">
-                  <MapPin size={15} className="mt-0.5 shrink-0 text-red" />
-                  <span>
-                    <Link href={`/boutique/${s.slug}`} className="font-medium text-white transition-colors hover:text-red">{s.name}</Link>
-                    <span className={`ml-2 inline-flex rounded-full px-2 py-0.5 text-[10px] font-semibold ${s.liveStatus === "open" ? "bg-emerald-400/15 text-emerald-300" : s.liveStatus === "closed" ? "bg-red/15 text-red" : "bg-white/10 text-white/50"}`}>{s.statusLabel}</span>
-                    <br />
-                    <span className="text-[11px] text-white/65">Opticien {storeSearchLabel(s)}</span><br />
-                    <a href={mapsHref(s)} target="_blank" rel="noopener noreferrer" className="transition-colors hover:text-white">{s.address}</a>
-                  </span>
+                <div className="flex items-center gap-2">
+                  <MapPin size={14} className="shrink-0 text-red" />
+                  <Link href={`/boutique/${s.slug}`} className="font-medium text-white transition-colors hover:text-red">{s.name}</Link>
+                  <span className={`ml-auto inline-flex rounded-full px-2 py-0.5 text-[10px] font-semibold ${s.liveStatus === "open" ? "bg-emerald-400/15 text-emerald-300" : s.liveStatus === "closed" ? "bg-red/15 text-red" : "bg-white/10 text-white/50"}`}>{s.statusLabel}</span>
                 </div>
               </li>
             ))}
@@ -122,8 +107,8 @@ export default async function Footer() {
         </div>
 
         <div>
-          <p className="eyebrow text-white/70">Contact</p>
-          <ul className="mt-4 space-y-3 text-sm text-white/85">
+          <p className="eyebrow text-white/85">Contact</p>
+          <ul className="mt-3 space-y-1.5 text-sm text-white/85">
             {phoneDisplay && (
               <li className="flex items-center gap-2">
                 <Phone size={16} className="shrink-0 text-red" />
@@ -147,23 +132,10 @@ export default async function Footer() {
             )}
           </ul>
 
-          {settings.hours.length > 0 && (
-            <>
-              <p className="eyebrow mt-6 text-white/70">Horaires</p>
-              <ul className="mt-3 space-y-2 text-sm text-white/85">
-                {settings.hours.map((h) => (
-                  <li key={h.day} className="flex justify-between gap-4">
-                    <span>{h.day}</span>
-                    <span className="font-medium text-white/75">{h.hours}</span>
-                  </li>
-                ))}
-              </ul>
-            </>
-          )}
         </div>
       </div>
 
-      <div className="border-t border-white/15 px-5 py-5 text-center text-xs text-white/65 sm:px-8">
+      <div className="border-t border-white/10 bg-black/20 px-5 py-3 text-center text-xs text-white/65 sm:px-8">
         <div className="flex flex-col items-center gap-2 sm:flex-row sm:justify-between sm:px-2">
           <span>© {new Date().getFullYear()} InfraRed Optic-Store. Tous droits réservés.</span>
           <span className="flex gap-4">

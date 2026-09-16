@@ -4,7 +4,7 @@ import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 import type { Prisma } from "@prisma/client";
 import type { ActionResult } from "@/components/ActionForm";
-import { getDelegations, getGovernorates, getLocalities } from "@/data/tunisia-addresses";
+import { resolveDirectoryAddress } from "@/lib/address-directory";
 import { CART_COOKIE, getCommerceSettings } from "@/lib/commerce";
 import { defaultCheckoutPayment, isCheckoutPaymentCompatible, type CheckoutFulfillment } from "@/lib/checkout-options";
 import { CartPriceUpdatedError, cartSubtotal, finalizeOrderFromCart, getOrderableCart, orderConfirmationPath, updatedCartPricing } from "@/lib/order-finalization";
@@ -28,14 +28,6 @@ function normalizeTunisianPhone(value: FormDataEntryValue | null) {
   return normalized;
 }
 
-function resolveTunisianAddress(input: { governorate: string; delegation: string; locality: string; postalCode?: string | null }) {
-  if (!getGovernorates().includes(input.governorate)) throw new Error("Choisissez un gouvernorat dans les propositions.");
-  const delegation = getDelegations(input.governorate).find((entry) => entry.name === input.delegation);
-  if (!delegation) throw new Error("Choisissez une délégation dans les propositions.");
-  const locality = getLocalities(input.governorate, delegation.name).find((entry) => entry.name === input.locality && (!input.postalCode || entry.postalCode === input.postalCode));
-  if (!locality) throw new Error("Choisissez une localité dans les propositions.");
-  return { governorate: input.governorate, delegation: delegation.name, locality: locality.name, postalCode: locality.postalCode };
-}
 
 async function requestOrigin() {
   const configured = process.env.NEXT_PUBLIC_SITE_URL?.trim();
@@ -76,7 +68,7 @@ export async function createOrderAction(_state: ActionResult, formData: FormData
     if (email && !/^\S+@\S+\.\S+$/.test(email)) throw new Error("L’adresse e-mail est invalide.");
     const phone = normalizeTunisianPhone(formData.get("phone"));
     const address = fulfillment === "DELIVERY" ? requiredText(formData.get("address"), "L’adresse exacte", 240) : null;
-    const structuredAddress = fulfillment === "DELIVERY" ? resolveTunisianAddress({
+    const structuredAddress = fulfillment === "DELIVERY" ? await resolveDirectoryAddress({
       governorate: requiredText(formData.get("governorate"), "Le gouvernorat", 100),
       delegation: requiredText(formData.get("delegation"), "La zone ou délégation", 120),
       locality: requiredText(formData.get("locality"), "La localité ou le quartier", 160),

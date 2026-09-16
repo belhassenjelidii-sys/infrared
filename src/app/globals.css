@@ -51,6 +51,7 @@ body {
 }
 
 .vf-container {
+  box-sizing: border-box;
   width: min(100%, 1440px);
   margin-inline: auto;
   padding-inline: clamp(18px, 2.05vw, 32px);

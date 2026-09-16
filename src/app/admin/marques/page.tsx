@@ -5,6 +5,7 @@ import ConfirmSubmitButton from "@/components/ConfirmSubmitButton";
 import { createBrandAction, updateBrandAction, toggleBrandActiveAction, deleteBrandAction } from "./actions";
 import Link from "next/link";
 import ImageUploadField from "@/components/ImageUploadField";
+import ManagedImage from "@/components/ManagedImage";
 
 export const dynamic = "force-dynamic";
 
@@ -22,15 +23,15 @@ export default async function AdminBrandsPage() {
       <p className="mt-3 text-sm text-stone">Les logos sont contenus automatiquement dans le petit format de la barre animée. <Link href="/admin/parametres/nos-maisons" className="font-medium text-red hover:text-red-dark">Régler la vitesse de la barre</Link></p>
 
       <div className="mt-8 grid gap-8 lg:grid-cols-[1fr_320px]">
-        <div className="overflow-hidden rounded-2xl border border-line bg-white">
-          <table className="w-full text-sm">
+        <div className="overflow-x-auto rounded-2xl border border-line bg-white">
+          <table className="w-full min-w-[780px] text-sm">
             <thead className="border-b border-line bg-mist text-left text-xs uppercase tracking-wide text-stone">
               <tr><th className="px-4 py-3">Barre</th><th className="px-4 py-3">Marque</th><th className="px-4 py-3">Produits</th><th className="px-4 py-3">Statut</th><th className="px-4 py-3 text-right">Actions</th></tr>
             </thead>
             <tbody>
               {brands.map((b) => (
                 <tr key={b.id} className="border-b border-line last:border-0">
-                  <td className="px-4 py-3"><div className="grid h-14 w-14 place-items-center overflow-hidden rounded-xl border border-line bg-mist">{b.marqueeImage ? <img src={b.marqueeImage} alt={`Collection ${b.name}`} className="h-full w-full object-cover" /> : b.logo ? <img src={b.logo} alt={`Logo ${b.name}`} className="h-full w-full object-contain p-1" /> : <span className="text-[10px] text-stone">Sans image</span>}</div></td>
+                  <td className="px-4 py-3"><div className="relative grid h-14 w-14 place-items-center overflow-hidden rounded-xl border border-line bg-mist">{b.marqueeImage ? <ManagedImage src={b.marqueeImage} alt={`Collection ${b.name}`} fill sizes="56px" className="object-cover" /> : b.logo ? <ManagedImage src={b.logo} alt={`Logo ${b.name}`} fill sizes="56px" className="object-contain p-1" /> : <span className="text-[10px] text-stone">Sans image</span>}</div></td>
                   <td className="px-4 py-3">
                     <form action={updateBrandAction.bind(null, b.id)} className="flex min-w-[260px] gap-2">
                       <input name="name" defaultValue={b.name} className="min-h-10 min-w-0 flex-1 rounded-lg border border-line px-3 text-sm" />

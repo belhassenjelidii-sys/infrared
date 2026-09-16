@@ -1,3 +1,5 @@
+import ManagedImage from "@/components/ManagedImage";
+
 // Real InfraRed logo — centralised here so every usage (header, footer,
 // dashboards, favicon) stays in sync. Source files live in /public:
 //   - logo.png        full lockup (glasses mark + wordmark), transparent bg
@@ -24,9 +26,13 @@ export default function Logo({
   const width = height * ratio;
 
   const img = (
-    <img
+    <ManagedImage
       src={src}
       alt="InfraRed Optic-Store"
+      width={Math.round(width)}
+      height={height}
+      quality={100}
+      unoptimized={src.startsWith("/uploads/")}
       className="object-contain"
       style={{ height, width: customSrc ? "auto" : width, maxWidth: 220 }}
     />

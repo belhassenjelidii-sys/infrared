@@ -8,6 +8,7 @@ import AdminShell from "@/components/AdminShell";
 import ConfirmSubmitButton from "@/components/ConfirmSubmitButton";
 import ImageUploadField from "@/components/ImageUploadField";
 import ManagedImage from "@/components/ManagedImage";
+import StoreHoursEditor from "@/components/StoreHoursEditor";
 import { createStoreAction, updateStoreAction, deleteStoreAction, setStoreStatusOverrideAction } from "./actions";
 
 export const dynamic = "force-dynamic";
@@ -156,18 +157,7 @@ export default async function AdminStoresPage() {
               <div className="sm:col-span-2 rounded-xl border border-line bg-mist/40 p-4">
                 <p className="text-sm font-medium">Horaires de cette boutique</p>
                 <p className="mt-1 text-xs text-stone">Exemples : <strong>09:30 – 19:30</strong>, <strong>09:00 – 13:00 / 14:00 – 18:00</strong> ou <strong>Fermé</strong>.</p>
-                <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-                  {DAYS.map((day) => (
-                    <label key={day} className="text-xs font-medium">
-                      {day}
-                      <input
-                        name={`hours_${day.toLowerCase()}`}
-                        defaultValue={getHoursForDay(store.hours, day) || defaultHoursFor(day, settings.hours)}
-                        className="mt-1 w-full rounded-lg border border-line bg-white px-3 py-2 text-sm font-normal"
-                      />
-                    </label>
-                  ))}
-                </div>
+                <StoreHoursEditor days={DAYS} initialHours={DAYS.map((day) => ({ day, hours: getHoursForDay(store.hours, day) || defaultHoursFor(day, settings.hours) }))} />
               </div>
 
               <div className="sm:col-span-2">
@@ -199,18 +189,7 @@ export default async function AdminStoresPage() {
 
         <div className="sm:col-span-2 rounded-xl border border-line bg-mist/40 p-4">
           <p className="text-sm font-medium">Horaires</p>
-          <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-            {DAYS.map((day) => (
-              <label key={day} className="text-xs font-medium">
-                {day}
-                <input
-                  name={`hours_${day.toLowerCase()}`}
-                  defaultValue={defaultHoursFor(day, settings.hours)}
-                  className="mt-1 w-full rounded-lg border border-line bg-white px-3 py-2 text-sm font-normal"
-                />
-              </label>
-            ))}
-          </div>
+          <StoreHoursEditor days={DAYS} initialHours={DAYS.map((day) => ({ day, hours: defaultHoursFor(day, settings.hours) }))} />
         </div>
 
         <div className="sm:col-span-2">

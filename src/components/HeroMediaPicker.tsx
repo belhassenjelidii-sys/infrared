@@ -3,8 +3,8 @@
 
 import { useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import ManagedImage from "@/components/ManagedImage";
 import { CheckCircle, Grip, Loader2, Maximize2, RotateCcw } from "lucide-react";
+import HomeHero from "@/components/HomeHero";
 import ImageUploadField from "./ImageUploadField";
 import { updateHeroMediaAction, updateHeroMediaLayoutAction } from "@/app/admin/parametres/actions";
 
@@ -15,6 +15,9 @@ type Props = {
   initialScale?: number;
   initialX?: number;
   initialY?: number;
+  initialTitle?: string | null;
+  initialSubtitle?: string | null;
+  initialCta?: string | null;
 };
 
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
@@ -26,6 +29,9 @@ export default function HeroMediaPicker({
   initialScale = 125,
   initialX = 0,
   initialY = 0,
+  initialTitle,
+  initialSubtitle,
+  initialCta,
 }: Props) {
   const [mediaType, setMediaType] = useState<"image" | "video">(initialMediaType);
   const [imageUrl, setImageUrl] = useState(initialImageUrl ?? "");
@@ -103,7 +109,6 @@ export default function HeroMediaPicker({
 
   const previewUrl = mediaType === "video" ? videoUrl : imageUrl;
   const hasMedia = Boolean(previewUrl);
-  const transform = `translate(${x}%, ${y}%) scale(${scale / 100})`;
 
   return (
     <div className="space-y-4">
@@ -141,37 +146,15 @@ export default function HeroMediaPicker({
 
         <div
           ref={previewRef}
-          className="relative mx-auto aspect-[16/7] max-w-3xl overflow-hidden rounded-2xl border border-line bg-white select-none touch-none"
+          className="relative mx-auto max-w-3xl overflow-hidden rounded-2xl border border-line bg-white select-none touch-none"
           onPointerDown={startDrag}
           onPointerMove={moveDrag}
           onPointerUp={endDrag}
           onPointerCancel={endDrag}
           onDoubleClick={resetLayout}
         >
-          <div className="absolute inset-0 bg-gradient-to-br from-white via-mist to-[#f0e2e0]" />
-          <div className="pointer-events-none absolute left-5 top-5 z-10 max-w-[46%] sm:left-7 sm:top-7">
-            <p className="eyebrow text-red">InfraRed Optic-Store</p>
-            <p className="font-display mt-2 text-xl leading-tight sm:text-3xl">Découvrez votre<br /><span className="text-red">prochaine paire.</span></p>
-            <div className="mt-4 h-2 w-24 rounded-full bg-red/80" />
-          </div>
-
-          {hasMedia ? (
-            <div className="absolute right-[8%] top-1/2 h-[76%] w-[34%] -translate-y-1/2">
-              <div className="h-full w-full origin-center" style={{ transform }}>
-                {mediaType === "video" ? (
-                  <video src={previewUrl!} muted playsInline autoPlay loop className="h-full w-full rounded-[1.5rem] object-cover" />
-                ) : (
-                  <ManagedImage src={previewUrl!} alt="Aperçu Hero" fill sizes="34vw" className="rounded-[1.5rem] object-contain bg-white p-2" unoptimized={previewUrl!.startsWith("/uploads/")} />
-                )}
-              </div>
-            </div>
-          ) : (
-            <div className="absolute right-[8%] top-1/2 flex h-[76%] w-[34%] -translate-y-1/2 items-center justify-center rounded-[1.5rem] border border-dashed border-line bg-white text-center text-xs text-stone">
-              Ajoute d&apos;abord une photo ou une vidéo.
-            </div>
-          )}
-
-          {hasMedia && <div className="pointer-events-none absolute right-3 top-3 rounded-full bg-white/90 px-2 py-1 text-[10px] font-medium text-stone shadow-sm"><Grip size={12} className="mr-1 inline" /> Glisser</div>}
+          <HomeHero preview title={initialTitle || "Les collections qui signent votre regard"} subtitle={initialSubtitle || "Lunettes solaires et optiques de grandes maisons, sélectionnées par nos opticiens à Tunis."} cta={initialCta || "Découvrir la collection"} imageUrl={mediaType === "image" ? imageUrl : null} videoUrl={mediaType === "video" ? videoUrl : null} mediaType={mediaType} scale={scale} x={x} y={y} />
+          {hasMedia && <div className="pointer-events-none absolute right-3 top-3 z-20 rounded-full bg-white/90 px-2 py-1 text-[10px] font-medium text-stone shadow-sm"><Grip size={12} className="mr-1 inline" /> Glisser</div>}
           <div className="pointer-events-none absolute inset-3 rounded-xl border border-dashed border-red/20" />
         </div>
 

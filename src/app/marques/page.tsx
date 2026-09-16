@@ -1,9 +1,9 @@
-/* eslint-disable @next/next/no-img-element */
 import type { Metadata } from "next";
 import Link from "next/link";
 import { ArrowUpRight } from "lucide-react";
 import { prisma } from "@/lib/prisma";
 import AnimatedSection from "@/components/AnimatedSection";
+import ManagedImage from "@/components/ManagedImage";
 
 export const metadata: Metadata = {
   title: "Marques",
@@ -41,7 +41,7 @@ export default async function BrandsPage() {
                 <div className="flex items-start justify-between">
                   {b.logo ? (
                     <div className="flex h-14 w-32 items-center justify-center overflow-hidden bg-white px-3 py-2">
-                      <img src={b.logo} alt={`${b.name} — logo`} className="max-h-9 w-full object-contain" loading="lazy" />
+                      <ManagedImage src={b.logo} alt={`${b.name} — logo`} width={128} height={56} className="max-h-9 w-full object-contain" />
                     </div>
                   ) : (
                     <div className="flex h-14 w-14 items-center justify-center bg-red-soft text-xl text-red">

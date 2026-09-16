@@ -1,4 +1,6 @@
 import Image from "next/image";
+import type { CSSProperties } from "react";
+import ExternalImage from "@/components/ExternalImage";
 
 type ManagedImageProps = {
   src: string;
@@ -9,6 +11,9 @@ type ManagedImageProps = {
   priority?: boolean;
   className?: string;
   unoptimized?: boolean;
+  width?: number;
+  height?: number;
+  style?: CSSProperties;
 };
 
 /**
@@ -17,17 +22,11 @@ type ManagedImageProps = {
  * still contain a direct image URL; show those safely without making the
  * whole application accept arbitrary hosts in next.config.ts.
  */
-export default function ManagedImage({ src, alt, fill = false, className = "", priority, quality = 100, ...props }: ManagedImageProps) {
+export default function ManagedImage({ src, alt, fill = false, className = "", priority, quality = 100, width = 1200, height = 900, ...props }: ManagedImageProps) {
   if (/^https?:\/\//i.test(src)) {
-    return (
-      <img
-        src={src}
-        alt={alt}
-        loading={priority ? "eager" : "lazy"}
-        className={fill ? `absolute inset-0 h-full w-full ${className}` : className}
-      />
-    );
+    return <ExternalImage src={src} alt={alt} fill={fill} priority={priority} className={className} width={width} height={height} {...props} />;
   }
 
-  return <Image src={src} alt={alt} fill={fill} priority={priority} quality={quality} className={className} {...props} />;
+  if (fill) return <Image src={src} alt={alt} fill priority={priority} quality={quality} className={className} {...props} />;
+  return <Image src={src} alt={alt} width={width} height={height} priority={priority} quality={quality} className={className} {...props} />;
 }

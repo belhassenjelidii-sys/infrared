@@ -3,7 +3,7 @@ import type { LucideIcon } from "lucide-react";
 import {
   Archive, ArrowUpRight, Bell, Boxes, CalendarDays, ClipboardList, CreditCard, FileImage, Glasses,
   Image as ImageIcon, Layers3, LayoutDashboard, LogOut, Menu, Package, Percent,
-  KeyRound, Search, Settings, ShieldCheck, ShoppingCart, SlidersHorizontal, Sparkles, Store,
+  KeyRound, MapPin, Search, Settings, ShieldCheck, ShoppingCart, SlidersHorizontal, Sparkles, Store,
   Tags, TrendingUp, Truck, Users, UsersRound,
 } from "lucide-react";
 import { logoutAction } from "@/app/login/actions";
@@ -45,6 +45,7 @@ const navigation = (features: Features): { label: string; items: NavItem[] }[] =
   { label: "Paramètres", items: [
     { href: "/admin/parametres", label: "Général", permission: "content.manage", icon: Settings },
     { href: "/admin/configuration", label: "Catalogue", permission: "settings.manage", icon: SlidersHorizontal },
+    { href: "/admin/adresses", label: "Adresses", permission: "settings.manage", icon: MapPin },
     { href: "/admin/livraison", label: "Livraison", permission: "settings.critical", icon: Truck, status: featureLabel(features.delivery || features.storePickup) },
     { href: "/admin/paiements", label: "Paiement", permission: "payments.manage", icon: CreditCard, status: featureLabel(features.cashOnDelivery || features.onlinePayment || features.storePickup) },
     { href: "/admin/seo", label: "SEO", permission: "seo.manage", icon: Search },

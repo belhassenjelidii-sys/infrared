@@ -2,12 +2,13 @@ import { redirect } from "next/navigation";
 import { getCommerceSettings, getCurrentCart } from "@/lib/commerce";
 import { getTndPaymentPublicStatus } from "@/lib/tnd-payment";
 import { getDbStores } from "@/lib/site-data";
+import { getAddressDirectory } from "@/lib/address-directory";
 import CheckoutForm from "./CheckoutForm";
 
 export const dynamic = "force-dynamic";
 
 export default async function CheckoutPage({ searchParams }: { searchParams: Promise<{ payment?: string }> }) {
-  const [features, cart, stores, gateway, query] = await Promise.all([getCommerceSettings(), getCurrentCart(), getDbStores(), getTndPaymentPublicStatus(), searchParams]);
+  const [features, cart, stores, gateway, query, addressDirectory] = await Promise.all([getCommerceSettings(), getCurrentCart(), getDbStores(), getTndPaymentPublicStatus(), searchParams, getAddressDirectory()]);
   if (!features.cart || !features.checkout || !features.orders) redirect("/catalogue");
   if (!cart?.items.length) redirect("/panier");
   const subtotal = cart.items.reduce((sum, item) => sum + Number(item.unitPrice) * item.quantity, 0);
@@ -21,6 +22,7 @@ export default async function CheckoutPage({ searchParams }: { searchParams: Pro
       gateway={{ ready: gateway.ready, label: gateway.label, mode: gateway.mode }}
       items={cart.items.map((item) => ({ id: item.id, quantity: item.quantity, unitPrice: Number(item.unitPrice), brand: item.variant.brand.name, model: item.variant.productModel?.name ?? item.variant.name, details: [item.variant.frameColorFamily ?? item.variant.color, item.variant.size].filter(Boolean).join(" · ") }))}
       subtotal={subtotal}
+      addressDirectory={addressDirectory}
     /></div>
   </div>;
 }

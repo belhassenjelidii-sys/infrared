@@ -75,6 +75,9 @@ export default async function AdminSettingsPage() {
           initialScale={s?.heroMediaScale ?? 125}
           initialX={s?.heroMediaX ?? 0}
           initialY={s?.heroMediaY ?? 0}
+          initialTitle={s?.heroTitle}
+          initialSubtitle={s?.heroSubtitle}
+          initialCta={s?.heroCtaLabel}
         />
 
         <div>
