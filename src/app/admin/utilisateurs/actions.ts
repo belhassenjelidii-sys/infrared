@@ -8,10 +8,7 @@ import { prisma } from "@/lib/prisma";
 import { Role } from "@prisma/client";
 import { getRequiredText, LIMITS, validateEmail, validatePassword } from "@/lib/validation";
 
-// Only COMMERCIAL (Marketing Digital & Commercial) and DEVELOPER accounts
-// can be created here — a single ADMIN account is enforced, matching the
-// "one admin only" requirement. Creating role=ADMIN is rejected even if
-// someone tampers with the form.
+// Legacy entry point kept for compatibility. Only the root account may use it.
 export async function createUserAction(formData: FormData) {
   const actor = await requirePermission("users.create");
   if (!isSystemAdmin(actor)) throw new Error("Utilisez la nouvelle gestion des utilisateurs.");
@@ -36,8 +33,8 @@ export async function toggleUserActiveAction(id: string, current: boolean) {
   const actor = await requirePermission("users.edit");
   const target = await prisma.user.findUnique({ where: { id } });
   if (!target) throw new Error("Utilisateur introuvable.");
-  if (isSystemAdmin(target) && !isSystemAdmin(actor)) throw new Error("Compte protégé.");
-  if (isSystemAdmin(target) || target.id === actor.userId) throw new Error("Le compte ADMIN principal ne peut pas être désactivé.");
+  if (target.role === "SUPER_ADMIN") throw new Error("Un compte Super Admin ne peut pas être désactivé.");
+  if (target.id === actor.userId) throw new Error("Vous ne pouvez pas désactiver votre propre compte.");
   if (target.active !== current) return;
   await prisma.user.update({ where: { id }, data: { active: !current } });
   revalidatePath("/admin/utilisateurs");
@@ -45,13 +42,13 @@ export async function toggleUserActiveAction(id: string, current: boolean) {
 
 
 export async function changeUserPasswordAction(id: string, formData: FormData) {
-  const actor = await requirePermission("users.edit");
+  await requirePermission("users.edit");
   const password = validatePassword(formData.get("password"));
   const confirmation = validatePassword(formData.get("passwordConfirmation"));
   if (password !== confirmation) throw new Error("Les deux mots de passe ne correspondent pas.");
   const target = await prisma.user.findUnique({ where: { id }, select: { id: true, role: true } });
   if (!target) throw new Error("Utilisateur introuvable.");
-  if (isSystemAdmin(target) && !isSystemAdmin(actor)) throw new Error("Compte protégé.");
+  if (target.role === "SUPER_ADMIN") throw new Error("Le mot de passe d’un Super Admin se modifie uniquement depuis son espace Sécurité.");
   const passwordHash = await bcrypt.hash(password, 12);
   await prisma.$transaction([
     prisma.user.update({ where: { id }, data: { passwordHash, authVersion: { increment: 1 } } }),

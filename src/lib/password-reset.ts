@@ -35,9 +35,9 @@ async function getPublicSiteUrl(): Promise<string> {
 export async function requestPasswordReset(email: string): Promise<void> {
   const user = await prisma.user.findUnique({
     where: { email },
-    select: { id: true, email: true, name: true, active: true },
+    select: { id: true, email: true, name: true, active: true, role: true },
   });
-  if (!user?.active) return;
+  if (!user?.active || user.role === "SUPER_ADMIN") return;
 
   const token = randomToken(32);
   const tokenHash = hashToken(token);
@@ -91,6 +91,7 @@ export async function resetPassword(token: string, password: string): Promise<vo
     if (!record || record.usedAt || record.expiresAt <= now || !record.user.active) {
       throw new Error("Ce lien de réinitialisation est invalide ou expiré.");
     }
+    if (record.user.role === "SUPER_ADMIN") throw new Error("Le mot de passe Super Admin se modifie uniquement depuis l’espace Sécurité.");
 
     const claimed = await tx.passwordResetToken.updateMany({
       where: { id: record.id, usedAt: null },

@@ -8,6 +8,7 @@ import { writeAuditLog } from "@/lib/audit-log";
 import { TWO_FACTOR_CHALLENGE_COOKIE, beginTwoFactorSetup, confirmTwoFactorSetup, disableTwoFactor, hashRecoveryCodes, generateRecoveryCodes, verifyTotp } from "@/lib/two-factor";
 import { decryptSecret } from "@/lib/secrets";
 import { clientIp, consumeRateLimit } from "@/lib/security/rate-limit";
+import { validatePassword } from "@/lib/validation";
 
 export type TwoFactorState = { error?: string; manualKey?: string; qrCode?: string; recoveryCodes?: string[]; success?: string };
 async function currentUser() { const session = await getSession(); if (!session) redirect("/login"); return session; }
@@ -16,3 +17,26 @@ export async function beginTwoFactorAction(_: TwoFactorState): Promise<TwoFactor
 export async function confirmTwoFactorAction(_: TwoFactorState, formData: FormData): Promise<TwoFactorState> { try { const user = await currentUser(); await limitTwoFactorVerification("setup", user.userId); const recoveryCodes = await confirmTwoFactorSetup(user, String(formData.get("code") ?? "")); await writeAuditLog(prisma, { actor: user, category: "SECURITY", action: "auth.two_factor.enabled", entityType: "User", entityId: user.userId }); return { recoveryCodes, success: "Authentification à deux facteurs activée." }; } catch (error) { await writeAuditLog(prisma, { category: "SECURITY", action: "auth.two_factor.enable_denied", entityType: "Auth", result: "DENIED" }); return { error: error instanceof Error ? error.message : "Code invalide." }; } }
 export async function regenerateRecoveryCodesAction(_: TwoFactorState, formData: FormData): Promise<TwoFactorState> { try { const user = await currentUser(); await limitTwoFactorVerification("recovery", user.userId); const row = await prisma.user.findUniqueOrThrow({ where: { id: user.userId }, select: { twoFactorEnabled: true, twoFactorSecretEncrypted: true } }); if (!row.twoFactorEnabled || !row.twoFactorSecretEncrypted || !verifyTotp(decryptSecret(row.twoFactorSecretEncrypted), user.email, String(formData.get("code") ?? ""))) throw new Error("Code d’authentification invalide."); const recoveryCodes = generateRecoveryCodes(); await prisma.user.update({ where: { id: user.userId }, data: { twoFactorRecoveryCodes: hashRecoveryCodes(recoveryCodes) } }); await writeAuditLog(prisma, { actor: user, category: "SECURITY", action: "auth.two_factor.recovery_regenerated", entityType: "User", entityId: user.userId }); return { recoveryCodes, success: "Nouveaux codes générés." }; } catch (error) { return { error: error instanceof Error ? error.message : "Impossible de générer les codes." }; } }
 export async function disableTwoFactorAction(_: TwoFactorState, formData: FormData): Promise<TwoFactorState> { try { const user = await currentUser(); await limitTwoFactorVerification("disable", user.userId); const row = await prisma.user.findUniqueOrThrow({ where: { id: user.userId }, select: { passwordHash: true, twoFactorSecretEncrypted: true, twoFactorRecoveryCodes: true } }); const result = await disableTwoFactor({ userId: user.userId, email: user.email, ...row }, await bcrypt.compare(String(formData.get("password") ?? ""), row.passwordHash), String(formData.get("code") ?? "")); await writeAuditLog(prisma, { actor: user, category: "SECURITY", action: result.usedRecoveryCode ? "auth.two_factor.disabled_with_recovery" : "auth.two_factor.disabled", entityType: "User", entityId: user.userId }); (await cookies()).delete(TWO_FACTOR_CHALLENGE_COOKIE); await setSessionCookie(await createSessionToken({ ...user, authVersion: user.authVersion + 1 })); return { success: "Authentification à deux facteurs désactivée." }; } catch (error) { return { error: error instanceof Error ? error.message : "Impossible de désactiver le 2FA." }; } }
+
+export async function changeOwnPasswordAction(_: TwoFactorState, formData: FormData): Promise<TwoFactorState> {
+  try {
+    const user = await currentUser();
+    const currentPassword = String(formData.get("currentPassword") ?? "");
+    const newPassword = validatePassword(formData.get("newPassword"));
+    const confirmation = String(formData.get("passwordConfirmation") ?? "");
+    if (newPassword !== confirmation) throw new Error("Les deux nouveaux mots de passe ne correspondent pas.");
+    const row = await prisma.user.findUniqueOrThrow({ where: { id: user.userId }, select: { passwordHash: true } });
+    if (!await bcrypt.compare(currentPassword, row.passwordHash)) throw new Error("Le mot de passe actuel est incorrect.");
+    const passwordHash = await bcrypt.hash(newPassword, 12);
+    const updated = await prisma.$transaction(async (tx) => {
+      const saved = await tx.user.update({ where: { id: user.userId }, data: { passwordHash, authVersion: { increment: 1 } }, select: { authVersion: true } });
+      await tx.passwordResetToken.deleteMany({ where: { userId: user.userId } });
+      await writeAuditLog(tx, { actor: user, category: "SECURITY", action: "auth.password.changed", entityType: "User", entityId: user.userId });
+      return saved;
+    });
+    await setSessionCookie(await createSessionToken({ ...user, authVersion: updated.authVersion }));
+    return { success: "Mot de passe modifié." };
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : "Impossible de modifier le mot de passe." };
+  }
+}

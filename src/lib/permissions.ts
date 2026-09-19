@@ -8,17 +8,18 @@ export const PERMISSIONS = [
 ] as const;
 export type Permission = typeof PERMISSIONS[number];
 export type StaffRole = "SUPER_ADMIN" | "ADMIN" | "GESTIONNAIRE" | "COMMERCIAL" | "MARKETING" | "DEVELOPER";
-export const ROLE_LABELS: Record<StaffRole,string> = { SUPER_ADMIN: "Super administrateur", ADMIN: "Administrateur", GESTIONNAIRE: "Gestionnaire", COMMERCIAL: "Commercial", MARKETING: "Marketing", DEVELOPER: "Développeur (historique)" };
+export const ROLE_LABELS: Record<StaffRole,string> = { SUPER_ADMIN: "Super administrateur", ADMIN: "Administrateur", GESTIONNAIRE: "Gestionnaire", COMMERCIAL: "Commercial", MARKETING: "Marketing", DEVELOPER: "Développeur" };
+const ADMIN_PERMISSIONS = PERMISSIONS.filter((p) => !["roles.manage", "settings.critical", "payments.manage"].includes(p));
 export const DEFAULT_PERMISSIONS: Record<StaffRole,readonly Permission[]> = {
   SUPER_ADMIN: PERMISSIONS,
-  DEVELOPER: PERMISSIONS,
-  ADMIN: PERMISSIONS.filter((p) => !["roles.manage", "settings.critical", "payments.manage"].includes(p)),
+  ADMIN: ADMIN_PERMISSIONS,
+  DEVELOPER: ADMIN_PERMISSIONS,
   GESTIONNAIRE: ["dashboard.view", "products.view", "products.create", "products.edit", "products.archive", "prices.view", "prices.edit", "stock.view", "stock.edit", "images.manage", "models.view", "models.create", "models.edit", "models.manage", "brands.manage", "categories.manage", "promotions.manage", "stores.view", "orders.view", "orders.edit"],
   COMMERCIAL: ["dashboard.view", "products.view", "products.create", "products.edit", "prices.view", "prices.edit", "stock.view", "stock.edit", "images.manage", "models.view", "models.create", "models.edit", "models.manage"],
   MARKETING: ["dashboard.view", "products.view", "products.edit", "models.view", "images.manage", "content.manage", "seo.manage"],
 };
 export type PermissionUser = { role: string; permissions?: readonly string[] };
-export function isSystemAdmin(user: PermissionUser) { return user.role === "SUPER_ADMIN" || user.role === "DEVELOPER"; }
+export function isSystemAdmin(user: PermissionUser) { return user.role === "SUPER_ADMIN"; }
 export function can(user: PermissionUser | null | undefined, permission: Permission): boolean {
   if (!user) return false;
   if (isSystemAdmin(user)) return true;
