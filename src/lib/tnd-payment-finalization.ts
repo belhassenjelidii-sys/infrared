@@ -1,5 +1,5 @@
 import "server-only";
-import type { Prisma } from "@prisma/client";
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { finalizeOrderFromCart, getOrderableCart } from "@/lib/order-finalization";
 import { getTndPaymentConfig, verifyTndPayment } from "@/lib/tnd-payment";
@@ -28,15 +28,25 @@ export async function finalizeTndPaymentSession(sessionId: string, requestedPaym
   if (cart.priceUpdated) throw new Error("Le prix d’un article a changé. Votre panier a été actualisé, aucun ordre n’a été créé.");
   const fulfillment = jsonObject(session.fulfillmentSnapshot ?? {});
   const deliveryFee = fulfillment.method === "DELIVERY" ? Number(fulfillment.fee ?? 0) : 0;
-  const result = await finalizeOrderFromCart({
-    cartId: session.cartId,
-    customerSnapshot: jsonObject(session.customerSnapshot),
-    fulfillmentSnapshot: fulfillment,
-    paymentMethod: session.provider,
-    paymentStatus: "PAID",
-    externalPaymentId,
-    deliveryFee,
-  });
+  let result;
+  try {
+    result = await finalizeOrderFromCart({
+      cartId: session.cartId,
+      customerSnapshot: jsonObject(session.customerSnapshot),
+      fulfillmentSnapshot: fulfillment,
+      paymentMethod: session.provider,
+      paymentStatus: "PAID",
+      externalPaymentId,
+      deliveryFee,
+    });
+  } catch (error) {
+    const concurrentOrder = await prisma.order.findUnique({
+      where: { externalPaymentId },
+      select: { number: true, publicToken: true },
+    }).catch(() => null);
+    if (!concurrentOrder) throw error;
+    return { orderNumber: concurrentOrder.number, publicToken: concurrentOrder.publicToken };
+  }
   await prisma.onlinePaymentSession.deleteMany({ where: { id: session.id } });
   return { orderNumber: result.orderNumber, publicToken: result.publicToken };
 }

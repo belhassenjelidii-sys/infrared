@@ -482,7 +482,7 @@ model Order {
   fulfillmentSnapshot Json?
   paymentMethod String?
   paymentStatus String?
-  externalPaymentId String?
+  externalPaymentId String? @unique
   deliveryCompanyId String?
   deliveryCompany DeliveryCompany? @relation(fields: [deliveryCompanyId], references: [id], onDelete: SetNull)
   manualDeliveryFirstName String?
@@ -500,7 +500,6 @@ model Order {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   @@index([status, createdAt])
-  @@index([externalPaymentId])
   @@index([deliveryCompanyId])
   @@index([preparationStoreId])
   @@index([preparationEmailSentAt])

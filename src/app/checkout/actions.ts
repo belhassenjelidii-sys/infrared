@@ -103,8 +103,47 @@ export async function createOrderAction(_state: ActionResult, formData: FormData
       const returnUrl = `${origin}/api/payment/return?session=${encodeURIComponent(sessionId)}`;
       const cancelUrl = `${origin}/api/payment/cancel?session=${encodeURIComponent(sessionId)}`;
       const webhookUrl = `${origin}/api/payment/webhook`;
-      const gateway = await createTndPayment({ config, amountTnd: totalTnd, reference: sessionId, customerName: name, phone, email: email || null, returnUrl, cancelUrl, webhookUrl });
-      await prisma.onlinePaymentSession.create({ data: { id: sessionId, cartId, paypalOrderId: gateway.externalPaymentId, provider: config.provider, externalPaymentId: gateway.externalPaymentId, customerSnapshot, fulfillmentSnapshot, amountTnd: totalTnd, amountPayPal: totalTnd, currency: "TND", expiresAt: new Date(Date.now() + 30 * 60 * 1000) } });
+      const expiresAt = new Date(Date.now() + 30 * 60 * 1000);
+      const activeSessionId = await prisma.$transaction(async (tx) => {
+        await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${cartId}))`;
+        const activeSession = await tx.onlinePaymentSession.findFirst({
+          where: { cartId, expiresAt: { gt: new Date() } },
+          select: { id: true },
+        });
+        if (activeSession) return activeSession.id;
+        await tx.onlinePaymentSession.deleteMany({ where: { cartId, expiresAt: { lte: new Date() } } });
+        await tx.onlinePaymentSession.create({ data: { id: sessionId, cartId, paypalOrderId: sessionId, provider: config.provider, customerSnapshot, fulfillmentSnapshot, amountTnd: totalTnd, amountPayPal: totalTnd, currency: "TND", expiresAt } });
+        return null;
+      });
+      if (activeSessionId) {
+        throw new Error("Un paiement est déjà en cours pour ce panier. Terminez-le ou annulez-le avant de réessayer.");
+      }
+      let gateway;
+      try {
+        gateway = await createTndPayment({ config, amountTnd: totalTnd, reference: sessionId, customerName: name, phone, email: email || null, returnUrl, cancelUrl, webhookUrl });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "";
+        const httpStatus = /HTTP (\d{3})/.exec(message)?.[1];
+        const definitelyNotCreated = message === "Montant TND invalide."
+          || (httpStatus !== undefined && Number(httpStatus) >= 400 && Number(httpStatus) < 500 && ![408, 425, 429].includes(Number(httpStatus)));
+        if (definitelyNotCreated) {
+          await prisma.onlinePaymentSession.deleteMany({
+            where: { id: sessionId, externalPaymentId: null, paypalOrderId: sessionId },
+          }).catch(() => undefined);
+        }
+        throw error;
+      }
+      let referenceStored = false;
+      let persistenceError: unknown;
+      for (let attempt = 0; attempt < 3 && !referenceStored; attempt += 1) {
+        try {
+          await prisma.onlinePaymentSession.update({ where: { id: sessionId }, data: { paypalOrderId: gateway.externalPaymentId, externalPaymentId: gateway.externalPaymentId } });
+          referenceStored = true;
+        } catch (error) {
+          persistenceError = error;
+        }
+      }
+      if (!referenceStored) throw persistenceError;
       destination = gateway.approvalUrl;
     } else {
       const result = await finalizeOrderFromCart({ cartId, customerSnapshot, fulfillmentSnapshot, paymentMethod: payment, paymentStatus: "PENDING", deliveryFee });
