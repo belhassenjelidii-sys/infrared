@@ -8,91 +8,31 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 
 <!-- END:nextjs-agent-rules -->
 
-# InfraRed - Règles Git obligatoires
+# EXCEPTION TEMPORAIRE (priorité absolue)
 
-## Sauvegarde automatique GitHub
+Ne JAMAIS exécuter git add, git commit, git push, npm test ni npm run build, sauf demande explicite dans le message. Je fais moi-même les tests, le commit et le push.
+Une tâche est terminée quand les fichiers sont modifiés. Ne signale pas d'erreur si aucun commit ni push n'a été fait.
 
-Après CHAQUE étape de développement terminée :
+# InfraRed - Règles
 
-1. Vérifier les fichiers modifiés avec :
-   git status
+## Git (quand l'exception ci-dessus est supprimée)
 
-2. Vérifier que le projet fonctionne avant toute sauvegarde.
-   Exécuter au minimum :
-   npm run build
+Après chaque étape : git status, npm run build, puis si le build passe : git add ., un commit clair par étape, git push origin main. Si le build échoue, ne pas commit ni push : corriger d'abord. Pas de commit vide. Si le push échoue, signaler l'erreur.
+Afficher à la fin : résultat du build, hash et message du commit, confirmation du push.
 
-3. Si le build échoue :
-   - ne pas faire de commit
-   - ne pas faire de push
-   - corriger les erreurs
-   - relancer le build
+## Interdit sans demande explicite
 
-4. Quand l'étape fonctionne :
-   git add .
-
-5. Créer un commit séparé pour cette étape avec un message clair :
-   git commit -m "description claire de la modification"
-
-6. Envoyer immédiatement le commit vers GitHub :
-   git push origin main
-
-7. Vérifier que le push a réussi avant de commencer l'étape suivante.
-
-## Historique
-
-Chaque étape importante doit avoir son propre commit.
-
-Ne jamais regrouper plusieurs grosses fonctionnalités différentes dans le même commit.
-
-Le but est de pouvoir revenir facilement à une ancienne version du site.
+- git push --force, git reset --hard, git clean -fd, git add -f
+- Réécrire l'historique de main
 
 ## Sécurité
 
-Ne jamais ajouter ou envoyer vers GitHub :
+Ne jamais commit ni push : .env, .env.local, .env.production, mots de passe, clés API, tokens, secrets, bases de données locales. Vérifier avant chaque commit.
 
-- .env
-- .env.local
-- .env.production
-- mots de passe
-- clés API
-- tokens
-- secrets
-- bases de données locales
+## Avant une tâche
 
-Avant chaque commit, vérifier qu'aucun secret n'est inclus.
+git status et git branch --show-current : la branche active doit être main.
 
-## Git interdit
+## Économie de tokens
 
-Ne jamais utiliser sans demande explicite :
-
-- git push --force
-- git reset --hard
-- git clean -fd
-
-Ne jamais réécrire l'historique de main.
-
-## Avant une nouvelle tâche
-
-Exécuter :
-
-git status
-git branch --show-current
-
-Vérifier que la branche active est main.
-
-## Après chaque tâche
-
-Afficher :
-
-- résultat du build
-- hash du commit
-- message du commit
-- confirmation du push GitHub
-
-## Règles Git supplémentaires
-
-- S'il n'y a aucune modification à sauvegarder, ne pas créer de commit vide.
-- Ne jamais utiliser `git add -f` pour forcer l'ajout d'un fichier ignoré.
-- Si `git push` échoue pour une raison d'authentification ou de connexion, ne pas considérer la tâche comme terminée et signaler clairement l'erreur.
-
-Ne pas considérer l'étape comme terminée tant que le commit et le push n'ont pas réussi.
+Patchs ciblés uniquement, ne pas réécrire de fichiers entiers, ne lire que les fichiers nécessaires. Réponses finales courtes : fichiers modifiés + ce qu'il faut tester.
