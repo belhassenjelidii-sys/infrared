@@ -13,7 +13,7 @@ export const DEFAULT_PERMISSIONS: Record<StaffRole,readonly Permission[]> = {
   SUPER_ADMIN: PERMISSIONS,
   DEVELOPER: PERMISSIONS,
   ADMIN: PERMISSIONS.filter((p) => !["roles.manage", "settings.critical", "payments.manage"].includes(p)),
-  GESTIONNAIRE: ["dashboard.view", "products.view", "products.create", "products.edit", "products.archive", "prices.view", "prices.edit", "stock.view", "stock.edit", "images.manage", "models.view", "models.create", "models.edit", "models.manage", "brands.manage", "categories.manage", "promotions.manage", "stores.view", "orders.view", "orders.edit", "audit.view"],
+  GESTIONNAIRE: ["dashboard.view", "products.view", "products.create", "products.edit", "products.archive", "prices.view", "prices.edit", "stock.view", "stock.edit", "images.manage", "models.view", "models.create", "models.edit", "models.manage", "brands.manage", "categories.manage", "promotions.manage", "stores.view", "orders.view", "orders.edit"],
   COMMERCIAL: ["dashboard.view", "products.view", "products.create", "products.edit", "prices.view", "prices.edit", "stock.view", "stock.edit", "images.manage", "models.view", "models.create", "models.edit", "models.manage"],
   MARKETING: ["dashboard.view", "products.view", "products.edit", "models.view", "images.manage", "content.manage", "seo.manage"],
 };

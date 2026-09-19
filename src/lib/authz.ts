@@ -68,6 +68,9 @@ async function requireRoleOrRedirect(
   if (!session) {
     redirect("/login");
   }
+  if (session.twoFactorSetupRequired) {
+    redirect("/admin/securite");
+  }
   if (!allowedRoles.includes(session.role)) {
     throw new UnauthorizedError();
   }

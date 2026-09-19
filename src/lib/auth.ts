@@ -60,7 +60,6 @@ export async function authenticate(email: string, password: string) {
   if (!user || !user.active) return null;
   const ok = await verifyPassword(password, user.passwordHash);
   if (!ok) return null;
-  await prisma.user.update({ where: {id: user.id}, data: {lastLoginAt: new Date()} });
   return {
     userId: user.id,
     email: user.email,

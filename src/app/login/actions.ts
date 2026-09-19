@@ -1,5 +1,6 @@
 "use server";
 
+import { createHash } from "node:crypto";
 import { redirect } from "next/navigation";
 import { headers } from "next/headers";
 import { clientIp, consumeRateLimit } from "@/lib/security/rate-limit";
@@ -36,6 +37,7 @@ export async function loginAction(_prevState: LoginState, formData: FormData): P
     (await cookies()).set(TWO_FACTOR_CHALLENGE_COOKIE, challenge, { httpOnly: true, secure: process.env.NODE_ENV === "production", sameSite: "lax", path: "/", maxAge: 5 * 60 });
     return { twoFactorRequired: true };
   }
+  await prisma.user.update({ where: { id: user.userId }, data: { lastLoginAt: new Date() } });
   await writeAuditLog(prisma, { actor: user, category: "AUTH", action: "auth.login.success", entityType: "User", entityId: user.userId });
   const token = await createSessionToken(user);
   await setSessionCookie(token);
@@ -47,13 +49,15 @@ export async function verifyTwoFactorLoginAction(_prevState: LoginState, formDat
   const challenge = jar.get(TWO_FACTOR_CHALLENGE_COOKIE)?.value;
   const requestHeaders = await headers();
   const ip = clientIp(requestHeaders);
-  const rate = await consumeRateLimit(`two-factor-login:${ip}:${challenge ?? "missing"}`, 5, 5 * 60 * 1000);
+  const challengeKey = challenge ? createHash("sha256").update(challenge).digest("hex") : "missing";
+  const rate = await consumeRateLimit(`two-factor-login:${ip}:${challengeKey}`, 5, 5 * 60 * 1000);
   if (!rate.ok) return { error: "Trop de tentatives. Reconnectez-vous dans quelques minutes.", twoFactorRequired: true };
   try {
     if (!challenge) throw new Error("Étape d’authentification expirée. Reconnectez-vous.");
     const result = await verifyTwoFactorChallenge(challenge, String(formData.get("code") ?? ""));
     jar.delete(TWO_FACTOR_CHALLENGE_COOKIE);
     const user = { userId: result.user.id, name: result.user.name, email: result.user.email, role: result.user.role, authVersion: result.user.authVersion };
+    await prisma.user.update({ where: { id: user.userId }, data: { lastLoginAt: new Date() } });
     await writeAuditLog(prisma, { actor: user, category: "AUTH", action: result.usedRecoveryCode ? "auth.two_factor.recovery_code" : "auth.two_factor.success", entityType: "User", entityId: user.userId });
     await setSessionCookie(await createSessionToken(user));
   } catch (error) {
