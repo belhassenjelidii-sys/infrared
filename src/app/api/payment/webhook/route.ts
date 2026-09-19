@@ -2,6 +2,24 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { finalizeTndPaymentSession } from "@/lib/tnd-payment-finalization";
 
+const TEMPORARY_DATABASE_CODES = new Set(["P1001", "P1002", "P1008", "P1017", "P2024", "P2034"]);
+
+function isTemporaryFailure(error: unknown) {
+  if (!(error instanceof Error)) return false;
+  const details = error as Error & { code?: unknown; cause?: unknown };
+  if (typeof details.code === "string" && TEMPORARY_DATABASE_CODES.has(details.code)) return true;
+  const cause = details.cause && typeof details.cause === "object"
+    ? details.cause as { code?: unknown; message?: unknown }
+    : null;
+  const text = [
+    details.name,
+    details.message,
+    typeof cause?.code === "string" ? cause.code : "",
+    typeof cause?.message === "string" ? cause.message : "",
+  ].join(" ");
+  return /TimeoutError|AbortError|fetch failed|network|ECONN|ENOTFOUND|EAI_AGAIN|socket|HTTP (?:408|425|429|500|502|503|504)\b/i.test(text);
+}
+
 async function handle(request: Request, body?: Record<string, unknown>) {
   const url = new URL(request.url);
   const paymentId = url.searchParams.get("payment_ref")
@@ -22,7 +40,10 @@ async function handle(request: Request, body?: Record<string, unknown>) {
     return NextResponse.json({ ok: true });
   } catch (error) {
     console.error("TND payment webhook failed:", error instanceof Error ? error.message : error);
-    return NextResponse.json({ ok: false }, { status: 202 });
+    if (isTemporaryFailure(error)) {
+      return NextResponse.json({ error: "Traitement temporairement indisponible." }, { status: 503 });
+    }
+    return NextResponse.json({ error: "Notification de paiement invalide." }, { status: 400 });
   }
 }
 

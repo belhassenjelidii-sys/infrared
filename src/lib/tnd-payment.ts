@@ -12,6 +12,11 @@ export const PAYMENT_PROVIDER_LABELS: Record<TndPaymentProvider, string> = {
 };
 
 type PaymentMode = "sandbox" | "live";
+const PAYMENT_REQUEST_TIMEOUT_MS = 10_000;
+const PAYMENT_API_HOSTS: Partial<Record<TndPaymentProvider, readonly string[]>> = {
+  FLOUCI: ["developers.flouci.com"],
+  KONNECT: ["api.konnect.network", "api.sandbox.konnect.network"],
+};
 
 export type TndPaymentConfig = {
   provider: TndPaymentProvider;
@@ -34,6 +39,32 @@ function defaultApiBase(provider: TndPaymentProvider, mode: PaymentMode) {
       : "https://api.sandbox.konnect.network/api/v2";
   }
   return "";
+}
+
+function validatedApiBaseUrl(provider: TndPaymentProvider, value: string) {
+  let url: URL;
+  try {
+    url = new URL(value);
+  } catch {
+    throw new Error("L’URL de la passerelle de paiement est invalide.");
+  }
+  if (url.protocol !== "https:") throw new Error("La passerelle de paiement doit utiliser HTTPS.");
+  const allowedHosts = PAYMENT_API_HOSTS[provider];
+  if (allowedHosts && !allowedHosts.includes(url.hostname.toLowerCase())) {
+    throw new Error("Le domaine de la passerelle de paiement n’est pas autorisé.");
+  }
+  return url.toString().replace(/\/$/, "");
+}
+
+async function withPaymentTimeout<T>(request: Promise<T>): Promise<T> {
+  try {
+    return await request;
+  } catch (error) {
+    if (error instanceof Error && (error.name === "TimeoutError" || error.name === "AbortError")) {
+      throw new Error("La passerelle de paiement ne répond pas. Veuillez réessayer.");
+    }
+    throw error;
+  }
 }
 
 function configurationReady(row: {
@@ -91,17 +122,21 @@ export async function getTndPaymentConfig(): Promise<TndPaymentConfig> {
   if (!row || !configurationReady(row) || !isProvider(row.paymentProvider)) {
     throw new Error("La passerelle de paiement TND n’est pas complètement configurée.");
   }
+  const mode: PaymentMode = row.paymentMode === "live" ? "live" : "sandbox";
+  const apiBaseUrl = validatedApiBaseUrl(
+    row.paymentProvider,
+    row.paymentApiBaseUrl || defaultApiBase(row.paymentProvider, mode),
+  );
   if (row.paymentProvider === "CLICKTOPAY") {
     throw new Error("ClickToPay nécessite encore le profil API fourni par votre banque/SMT avant son activation.");
   }
-  const mode: PaymentMode = row.paymentMode === "live" ? "live" : "sandbox";
   return {
     provider: row.paymentProvider,
     mode,
     publicKey: row.paymentPublicKey,
     secret: decryptSecret(row.paymentSecretEncrypted!),
     merchantId: row.paymentMerchantId,
-    apiBaseUrl: (row.paymentApiBaseUrl || defaultApiBase(row.paymentProvider, mode)).replace(/\/$/, ""),
+    apiBaseUrl,
   };
 }
 
@@ -129,7 +164,7 @@ export async function createTndPayment(input: {
   if (!Number.isSafeInteger(amountMillimes) || amountMillimes <= 0) throw new Error("Montant TND invalide.");
 
   if (input.config.provider === "FLOUCI") {
-    const response = await fetch(`${input.config.apiBaseUrl}/generate_payment`, {
+    const response = await withPaymentTimeout(fetch(`${input.config.apiBaseUrl}/generate_payment`, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${input.config.publicKey}:${input.config.secret}`,
@@ -146,7 +181,8 @@ export async function createTndPayment(input: {
         session_timeout_secs: 1800,
       }),
       cache: "no-store",
-    });
+      signal: AbortSignal.timeout(PAYMENT_REQUEST_TIMEOUT_MS),
+    }));
     const body = await responseJson(response);
     const result = body?.result as Record<string, unknown> | undefined;
     const externalPaymentId = typeof result?.payment_id === "string" ? result.payment_id : "";
@@ -156,7 +192,7 @@ export async function createTndPayment(input: {
   }
 
   const [firstName, ...lastParts] = input.customerName.trim().split(/\s+/);
-  const response = await fetch(`${input.config.apiBaseUrl}/payments/init-payment`, {
+  const response = await withPaymentTimeout(fetch(`${input.config.apiBaseUrl}/payments/init-payment`, {
     method: "POST",
     headers: { "x-api-key": input.config.secret, "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -181,7 +217,8 @@ export async function createTndPayment(input: {
       theme: "light",
     }),
     cache: "no-store",
-  });
+    signal: AbortSignal.timeout(PAYMENT_REQUEST_TIMEOUT_MS),
+  }));
   const body = await responseJson(response);
   const externalPaymentId = typeof body?.paymentRef === "string" ? body.paymentRef : "";
   const approvalUrl = typeof body?.payUrl === "string" ? body.payUrl : "";
@@ -191,10 +228,11 @@ export async function createTndPayment(input: {
 
 export async function verifyTndPayment(config: TndPaymentConfig, externalPaymentId: string) {
   if (config.provider === "FLOUCI") {
-    const response = await fetch(`${config.apiBaseUrl}/verify_payment/${encodeURIComponent(externalPaymentId)}`, {
+    const response = await withPaymentTimeout(fetch(`${config.apiBaseUrl}/verify_payment/${encodeURIComponent(externalPaymentId)}`, {
       headers: { Authorization: `Bearer ${config.publicKey}:${config.secret}` },
       cache: "no-store",
-    });
+      signal: AbortSignal.timeout(PAYMENT_REQUEST_TIMEOUT_MS),
+    }));
     const body = await responseJson(response);
     const result = body?.result as Record<string, unknown> | undefined;
     return {
@@ -204,10 +242,11 @@ export async function verifyTndPayment(config: TndPaymentConfig, externalPayment
     };
   }
 
-  const response = await fetch(`${config.apiBaseUrl}/payments/${encodeURIComponent(externalPaymentId)}`, {
+  const response = await withPaymentTimeout(fetch(`${config.apiBaseUrl}/payments/${encodeURIComponent(externalPaymentId)}`, {
     headers: { "x-api-key": config.secret },
     cache: "no-store",
-  });
+    signal: AbortSignal.timeout(PAYMENT_REQUEST_TIMEOUT_MS),
+  }));
   const body = await responseJson(response);
   const payment = body?.payment as Record<string, unknown> | undefined;
   return {
