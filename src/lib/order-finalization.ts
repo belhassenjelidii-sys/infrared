@@ -131,6 +131,22 @@ export async function finalizeOrderFromCart(input: { cartId: string; customerSna
         if (changed.count !== 1) throw new Error(`Stock insuffisant pour ${item.variant.name}.`);
       }
     }
+
+    const currentProducts = await tx.product.findMany({
+      where: { id: { in: cart.items.map((item) => item.variantId) } },
+      select: { id: true, price: true },
+    });
+    const currentPrices = new Map(currentProducts.map((product) => [product.id, product.price]));
+    for (const item of cart.items) {
+      if (!currentPrices.has(item.variantId)) throw new Error(`${item.variant.name} n’est plus disponible.`);
+    }
+    const priceChanged = cart.items.some((item) => !new Prisma.Decimal(item.unitPrice).equals(currentPrices.get(item.variantId)!));
+    if (priceChanged) {
+      const repricedItems = cart.items.map((item) => ({ id: item.id, quantity: item.quantity, unitPrice: Number(currentPrices.get(item.variantId)!) }));
+      const repricedSubtotal = cart.items.reduce((sum, item) => sum.plus(currentPrices.get(item.variantId)!.mul(item.quantity)), new Prisma.Decimal(0));
+      throw new CartPriceUpdatedError({ items: repricedItems, subtotal: Number(repricedSubtotal), total: Number(repricedSubtotal.plus(input.deliveryFee)) });
+    }
+
     await tx.order.create({ data: { number: orderNumber, publicToken, status: "NEW", customerSnapshot: input.customerSnapshot, fulfillmentSnapshot: input.fulfillmentSnapshot, paymentMethod: input.paymentMethod, paymentStatus: input.paymentStatus, externalPaymentId: input.externalPaymentId, total, items: { create: cart.items.map((item) => ({ variantId: item.variantId, productName: item.variant.name, brandName: item.variant.brand.name, modelCode: item.variant.productModel?.code ?? null, reference: item.variant.variantReference ?? item.variant.reference, size: item.variant.size, frameColor: item.variant.frameColorFamily ?? item.variant.frameColorLabel ?? item.variant.color, lensColor: item.variant.lensColorFamily ?? item.variant.lensColorLabel, unitPrice: item.unitPrice, quantity: item.quantity })) } } });
     await writeAuditLog(tx, { category: "ORDERS", action: "order.create", entityType: "Order", entityId: orderNumber, after: { number: orderNumber, total, payment: input.paymentMethod } });
     await tx.cart.delete({ where: { id: cart.id } });

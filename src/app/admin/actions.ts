@@ -8,15 +8,25 @@ import { revalidateProductViews } from "@/lib/revalidate";
 
 export async function deleteProductAction(productId: string) {
   await requirePermission("products.delete");
-  const [images, product] = await Promise.all([
-    prisma.productImage.findMany({ where: { productId } }),
-    prisma.product.findUnique({ where: { id: productId }, select: { slug: true } }),
-  ]);
-  await prisma.productImage.deleteMany({ where: { productId } });
-  for (const image of images) await deleteUploadedImageIfUnreferenced(image.url);
-  await prisma.product.delete({ where: { id: productId } });
+  const product = await prisma.product.findUnique({
+    where: { id: productId },
+    select: { slug: true, images: { select: { url: true } }, orderItems: { select: { id: true }, take: 1 } },
+  });
+  if (!product) throw new Error("Produit introuvable.");
+  if (product.orderItems.length) {
+    await prisma.product.update({ where: { id: productId }, data: { archived: true } });
+    revalidatePath("/admin");
+    revalidateProductViews(product.slug);
+    return;
+  }
+  await prisma.$transaction(async (tx) => {
+    await tx.cartItem.deleteMany({ where: { variantId: productId } });
+    await tx.productImage.deleteMany({ where: { productId } });
+    await tx.product.delete({ where: { id: productId } });
+  });
+  for (const image of product.images) await deleteUploadedImageIfUnreferenced(image.url);
   revalidatePath("/admin");
-  revalidateProductViews(product?.slug);
+  revalidateProductViews(product.slug);
 }
 
 export async function toggleAvailableAction(productId: string, current: boolean) {

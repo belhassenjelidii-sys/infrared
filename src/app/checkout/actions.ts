@@ -1,5 +1,6 @@
 "use server";
 
+import { createHash } from "node:crypto";
 import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 import type { Prisma } from "@prisma/client";
@@ -10,6 +11,7 @@ import { defaultCheckoutPayment, isCheckoutPaymentCompatible, type CheckoutFulfi
 import { CartPriceUpdatedError, createOrderCartSnapshot, finalizeOrderFromCart, getOrderableCart, orderConfirmationPath, orderCartSnapshotTotal, updatedCartPricing } from "@/lib/order-finalization";
 import { createTndPayment, getTndPaymentConfig, getTndPaymentPublicStatus } from "@/lib/tnd-payment";
 import { prisma } from "@/lib/prisma";
+import { clientIp, consumeRateLimit } from "@/lib/security/rate-limit";
 
 function requiredText(value: FormDataEntryValue | null, label: string, max = 180) {
   const text = String(value ?? "").trim();
@@ -147,6 +149,14 @@ export async function createOrderAction(_state: ActionResult, formData: FormData
       if (!referenceStored) throw persistenceError;
       destination = gateway.approvalUrl;
     } else {
+      if (payment === "CASH_ON_DELIVERY" || payment === "CASH_IN_STORE") {
+        const phoneHash = createHash("sha256").update(phone).digest("hex");
+        const phoneRate = await consumeRateLimit(`checkout-order:phone:${phoneHash}`, 3, 30 * 60 * 1000);
+        if (!phoneRate.ok) throw new Error("Trop de tentatives de commande. Veuillez réessayer dans quelques minutes.");
+        const ip = clientIp(await headers());
+        const ipRate = ip === "unknown" ? null : await consumeRateLimit(`checkout-order:ip:${ip}`, 5, 15 * 60 * 1000);
+        if (ipRate?.ok === false) throw new Error("Trop de tentatives de commande. Veuillez réessayer dans quelques minutes.");
+      }
       const result = await finalizeOrderFromCart({ cartId, customerSnapshot, fulfillmentSnapshot, paymentMethod: payment, paymentStatus: "PENDING", deliveryFee });
       (await cookies()).delete(CART_COOKIE);
       destination = orderConfirmationPath(result.orderNumber, result.publicToken);
