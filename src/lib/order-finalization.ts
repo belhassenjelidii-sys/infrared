@@ -1,6 +1,6 @@
 import "server-only";
 import { randomBytes } from "node:crypto";
-import type { Prisma } from "@prisma/client";
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { writeAuditLog } from "@/lib/audit-log";
 
@@ -32,6 +32,74 @@ export async function getOrderableCart(cartId: string) {
 
 export function cartSubtotal(cart: Awaited<ReturnType<typeof getOrderableCart>>) {
   return cart.items.reduce((sum, item) => sum + Number(item.unitPrice) * item.quantity, 0);
+}
+
+export type FrozenOrderItem = {
+  variantId: string;
+  productName: string;
+  brandName: string;
+  modelCode: string | null;
+  reference: string;
+  size: string | null;
+  frameColor: string | null;
+  lensColor: string | null;
+  unitPrice: string;
+  quantity: number;
+};
+
+export type OrderCartSnapshot = { version: 1; subtotal: string; items: FrozenOrderItem[] };
+
+export function createOrderCartSnapshot(cart: Awaited<ReturnType<typeof getOrderableCart>>): OrderCartSnapshot {
+  const items = cart.items.map((item) => ({
+    variantId: item.variantId,
+    productName: item.variant.name,
+    brandName: item.variant.brand.name,
+    modelCode: item.variant.productModel?.code ?? null,
+    reference: item.variant.variantReference ?? item.variant.reference,
+    size: item.variant.size,
+    frameColor: item.variant.frameColorFamily ?? item.variant.frameColorLabel ?? item.variant.color,
+    lensColor: item.variant.lensColorFamily ?? item.variant.lensColorLabel,
+    unitPrice: new Prisma.Decimal(item.unitPrice).toFixed(3),
+    quantity: item.quantity,
+  }));
+  const subtotal = items.reduce((sum, item) => sum.plus(new Prisma.Decimal(item.unitPrice).mul(item.quantity)), new Prisma.Decimal(0));
+  return { version: 1, subtotal: subtotal.toFixed(3), items };
+}
+
+export function parseOrderCartSnapshot(value: Prisma.JsonValue): OrderCartSnapshot {
+  if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("Snapshot panier invalide.");
+  const raw = value as Record<string, Prisma.JsonValue>;
+  if (raw.version !== 1 || !Array.isArray(raw.items) || raw.items.length === 0 || typeof raw.subtotal !== "string") throw new Error("Snapshot panier invalide.");
+  const items = raw.items.map((entry) => {
+    if (!entry || typeof entry !== "object" || Array.isArray(entry)) throw new Error("Ligne du snapshot panier invalide.");
+    const item = entry as Record<string, Prisma.JsonValue>;
+    const required = ["variantId", "productName", "brandName", "reference", "unitPrice"] as const;
+    if (required.some((key) => typeof item[key] !== "string" || !String(item[key]).trim())) throw new Error("Ligne du snapshot panier invalide.");
+    const quantity = item.quantity;
+    if (typeof quantity !== "number" || !Number.isInteger(quantity) || quantity <= 0) throw new Error("Quantité du snapshot panier invalide.");
+    let unitPrice: Prisma.Decimal;
+    try { unitPrice = new Prisma.Decimal(String(item.unitPrice)); } catch { throw new Error("Prix du snapshot panier invalide."); }
+    if (unitPrice.isNegative() || unitPrice.decimalPlaces() > 3) throw new Error("Prix du snapshot panier invalide.");
+    const nullable = (key: "modelCode" | "size" | "frameColor" | "lensColor") => {
+      if (item[key] === null) return null;
+      if (typeof item[key] === "string") return item[key];
+      throw new Error("Ligne du snapshot panier invalide.");
+    };
+    return {
+      variantId: String(item.variantId), productName: String(item.productName), brandName: String(item.brandName),
+      modelCode: nullable("modelCode"), reference: String(item.reference), size: nullable("size"),
+      frameColor: nullable("frameColor"), lensColor: nullable("lensColor"), unitPrice: unitPrice.toFixed(3), quantity,
+    };
+  });
+  const calculated = items.reduce((sum, item) => sum.plus(new Prisma.Decimal(item.unitPrice).mul(item.quantity)), new Prisma.Decimal(0));
+  let storedSubtotal: Prisma.Decimal;
+  try { storedSubtotal = new Prisma.Decimal(raw.subtotal); } catch { throw new Error("Sous-total du snapshot panier invalide."); }
+  if (!calculated.equals(storedSubtotal)) throw new Error("Le sous-total du snapshot panier est incohérent.");
+  return { version: 1, subtotal: calculated.toFixed(3), items };
+}
+
+export function orderCartSnapshotTotal(snapshot: OrderCartSnapshot, deliveryFee: number | Prisma.Decimal) {
+  return new Prisma.Decimal(snapshot.subtotal).plus(deliveryFee);
 }
 
 export type UpdatedCartPricing = { items: { id: string; quantity: number; unitPrice: number }[]; subtotal: number; total: number };
@@ -68,4 +136,23 @@ export async function finalizeOrderFromCart(input: { cartId: string; customerSna
     await tx.cart.delete({ where: { id: cart.id } });
   });
   return { orderNumber, publicToken, total };
+}
+
+export async function finalizeOrderFromSnapshot(input: { cartId: string; snapshot: OrderCartSnapshot; customerSnapshot: Prisma.InputJsonObject; fulfillmentSnapshot: Prisma.InputJsonObject; paymentMethod: string; paymentStatus: string; externalPaymentId: string; total: Prisma.Decimal }) {
+  const orderNumber = `IR-${Date.now().toString(36).toUpperCase()}-${crypto.randomUUID().slice(0,4).toUpperCase()}`;
+  const publicToken = randomBytes(32).toString("base64url");
+  await prisma.$transaction(async (tx) => {
+    for (const item of input.snapshot.items) {
+      const variant = await tx.product.findUnique({ where: { id: item.variantId }, select: { stock: true } });
+      if (!variant) throw new Error(`${item.productName} n’est plus disponible.`);
+      if (variant.stock !== null) {
+        const changed = await tx.product.updateMany({ where: { id: item.variantId, stock: { gte: item.quantity } }, data: { stock: { decrement: item.quantity } } });
+        if (changed.count !== 1) throw new Error(`Stock insuffisant pour ${item.productName}.`);
+      }
+    }
+    await tx.order.create({ data: { number: orderNumber, publicToken, status: "NEW", customerSnapshot: input.customerSnapshot, fulfillmentSnapshot: input.fulfillmentSnapshot, paymentMethod: input.paymentMethod, paymentStatus: input.paymentStatus, externalPaymentId: input.externalPaymentId, total: input.total, items: { create: input.snapshot.items } } });
+    await writeAuditLog(tx, { category: "ORDERS", action: "order.create", entityType: "Order", entityId: orderNumber, after: { number: orderNumber, total: input.total.toString(), payment: input.paymentMethod } });
+    await tx.cart.deleteMany({ where: { id: input.cartId } });
+  });
+  return { orderNumber, publicToken, total: input.total };
 }

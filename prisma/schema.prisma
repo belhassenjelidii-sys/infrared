@@ -567,6 +567,7 @@ model OnlinePaymentSession {
   paypalOrderId       String   @unique
   provider             String   @default("PAYPAL")
   externalPaymentId   String?  @unique
+  cartSnapshot        Json?
   customerSnapshot    Json
   fulfillmentSnapshot Json?
   amountTnd           Decimal  @db.Decimal(12, 3)

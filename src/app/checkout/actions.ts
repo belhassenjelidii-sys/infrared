@@ -7,7 +7,7 @@ import type { ActionResult } from "@/components/ActionForm";
 import { resolveDirectoryAddress } from "@/lib/address-directory";
 import { CART_COOKIE, getCommerceSettings } from "@/lib/commerce";
 import { defaultCheckoutPayment, isCheckoutPaymentCompatible, type CheckoutFulfillment } from "@/lib/checkout-options";
-import { CartPriceUpdatedError, cartSubtotal, finalizeOrderFromCart, getOrderableCart, orderConfirmationPath, updatedCartPricing } from "@/lib/order-finalization";
+import { CartPriceUpdatedError, createOrderCartSnapshot, finalizeOrderFromCart, getOrderableCart, orderConfirmationPath, orderCartSnapshotTotal, updatedCartPricing } from "@/lib/order-finalization";
 import { createTndPayment, getTndPaymentConfig, getTndPaymentPublicStatus } from "@/lib/tnd-payment";
 import { prisma } from "@/lib/prisma";
 
@@ -96,8 +96,9 @@ export async function createOrderAction(_state: ActionResult, formData: FormData
 
     if (payment === "ONLINE_TND") {
       const config = await getTndPaymentConfig();
-      const totalTnd = cartSubtotal(cart) + deliveryFee;
-      if (totalTnd <= 0) throw new Error("Le montant de la commande est invalide.");
+      const cartSnapshot = createOrderCartSnapshot(cart);
+      const totalTnd = orderCartSnapshotTotal(cartSnapshot, deliveryFee);
+      if (totalTnd.lte(0)) throw new Error("Le montant de la commande est invalide.");
       const sessionId = crypto.randomUUID();
       const origin = await requestOrigin();
       const returnUrl = `${origin}/api/payment/return?session=${encodeURIComponent(sessionId)}`;
@@ -112,7 +113,7 @@ export async function createOrderAction(_state: ActionResult, formData: FormData
         });
         if (activeSession) return activeSession.id;
         await tx.onlinePaymentSession.deleteMany({ where: { cartId, expiresAt: { lte: new Date() } } });
-        await tx.onlinePaymentSession.create({ data: { id: sessionId, cartId, paypalOrderId: sessionId, provider: config.provider, customerSnapshot, fulfillmentSnapshot, amountTnd: totalTnd, amountPayPal: totalTnd, currency: "TND", expiresAt } });
+        await tx.onlinePaymentSession.create({ data: { id: sessionId, cartId, paypalOrderId: sessionId, provider: config.provider, cartSnapshot: cartSnapshot as unknown as Prisma.InputJsonObject, customerSnapshot, fulfillmentSnapshot, amountTnd: totalTnd, amountPayPal: totalTnd, currency: "TND", expiresAt } });
         return null;
       });
       if (activeSessionId) {
@@ -120,7 +121,7 @@ export async function createOrderAction(_state: ActionResult, formData: FormData
       }
       let gateway;
       try {
-        gateway = await createTndPayment({ config, amountTnd: totalTnd, reference: sessionId, customerName: name, phone, email: email || null, returnUrl, cancelUrl, webhookUrl });
+        gateway = await createTndPayment({ config, amountTnd: Number(totalTnd), reference: sessionId, customerName: name, phone, email: email || null, returnUrl, cancelUrl, webhookUrl });
       } catch (error) {
         const message = error instanceof Error ? error.message : "";
         const httpStatus = /HTTP (\d{3})/.exec(message)?.[1];
